@@ -1,0 +1,5 @@
+# Bun 的隔离式链接（isolated）在 monorepo 下会让部分包的传递依赖
+# 对 bundler 不可见，典型症状是 vite / tsc 报找不到 picomatch。
+# 统一用 hoisted，装完即可直接跑。
+[install]
+linker = "hoisted"

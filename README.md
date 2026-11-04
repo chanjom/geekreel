@@ -185,12 +185,14 @@ GeekReel AI Studio 跑在你自己的机器上。没有账号，没有云端成�
 
 ## 快速开始
 
+完整的环境要求、坑位排查、换机器与备份步骤见 [docs/DEPLOY.md](docs/DEPLOY.md)。
+
 **环境**：已安装 [Bun](https://bun.sh)（1.2+）。macOS / Windows / Linux 可跑。`bun install` 会按当前系统补 yt-dlp；ffmpeg 用项目依赖。不要依赖 Homebrew / pipx / scoop 包装脚本。
 
 macOS / Linux：
 
 ```bash
-git clone https://github.com/geekhome-lab/geekreel.git
+git clone https://github.com/chanjom/geekreel.git
 cd geekreel
 ./scripts/dev.sh
 ```
@@ -198,7 +200,7 @@ cd geekreel
 Windows（cmd 或 PowerShell）：
 
 ```bat
-git clone https://github.com/geekhome-lab/geekreel.git
+git clone https://github.com/chanjom/geekreel.git
 cd geekreel
 scripts\dev.cmd
 ```
@@ -447,12 +449,14 @@ A project is a local folder. Canvas wires text / episode / scene / shot / image 
 
 ## Quick start
 
+Full setup requirements, known pitfalls, machine migration and backup: see [docs/DEPLOY.md](docs/DEPLOY.md).
+
 Requires [Bun](https://bun.sh) 1.2+. Runs on macOS, Windows, and Linux. `bun install` fetches a matching yt-dlp for the current OS. Do not depend on Homebrew, pipx, or scoop wrapper scripts for ffmpeg / yt-dlp.
 
 macOS / Linux:
 
 ```bash
-git clone https://github.com/geekhome-lab/geekreel.git
+git clone https://github.com/chanjom/geekreel.git
 cd geekreel
 ./scripts/dev.sh
 ```
@@ -460,7 +464,7 @@ cd geekreel
 Windows (cmd or PowerShell):
 
 ```bat
-git clone https://github.com/geekhome-lab/geekreel.git
+git clone https://github.com/chanjom/geekreel.git
 cd geekreel
 scripts\dev.cmd
 ```
