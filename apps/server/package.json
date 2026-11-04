@@ -1,0 +1,27 @@
+{
+  "name": "@vw/server",
+  "version": "0.1.2",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "bun --watch src/index.ts",
+    "start": "bun src/index.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@vw/analyze": "workspace:*",
+    "@vw/core": "workspace:*",
+    "@vw/media": "workspace:*",
+    "@vw/models": "workspace:*",
+    "@vw/push": "workspace:*",
+    "@vw/radar": "workspace:*",
+    "@vw/pipeline": "workspace:*",
+    "@vw/remake": "workspace:*",
+    "@vw/style": "workspace:*",
+    "hono": "^4.8.0"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.2.0",
+    "typescript": "^5.8.0"
+  }
+}

@@ -1,0 +1,7 @@
+# 官方发布文件名
+yt-dlp_macos
+
+# 各平台二进制不进仓库：缺文件时程序自己下到本目录，并写下 .platform 记号
+yt-dlp
+yt-dlp.exe
+.platform

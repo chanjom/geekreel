@@ -1,0 +1,414 @@
+/**
+ * @vw/media —— ffmpeg/ffprobe 封装。
+ * 检测顺序：环境变量 → 项目自带(ffmpeg-static) → PATH → 常见安装位置。
+ * 自带优先，换机器不用装 ffmpeg。
+ */
+
+/// <reference path="./types.d.ts" />
+import { existsSync } from "node:fs";
+import { homedir } from "node:os";
+import { join } from "node:path";
+import ffmpegStaticPath from "ffmpeg-static";
+import ffprobeStatic from "ffprobe-static";
+import { exeName, whichBin } from "./which";
+
+export * from "./timeline";
+export { whichBin } from "./which";
+
+export interface MediaBins {
+  ffmpeg: string | null;
+  ffprobe: string | null;
+  /** "env" | "path" | "common" | "bundled" | "none" */
+  source: "env" | "path" | "common" | "bundled" | "none";
+  available: boolean;
+}
+
+let cached: MediaBins | null = null;
+
+/** 真实二进制；丢掉 ffmpeg-static 偶尔给出的 .js 入口 */
+function usableBin(p: string | null | undefined): string | null {
+  if (!p || !existsSync(p)) return null;
+  if (/\.(js|mjs|cjs)$/i.test(p)) return null;
+  return p;
+}
+
+/**
+ * 真的能跑起来才算数。
+ * 自带包被网络截断时文件还在、大小也像样，但一 spawn 就是 EFTYPE，
+ * 这种必须跳过，否则整个出片链路都瘫。
+ */
+function binWorks(p: string | null): boolean {
+  if (!p) return false;
+  try {
+    const r = Bun.spawnSync([p, "-version"], { stdout: "ignore", stderr: "ignore", timeout: 8000 });
+    return r.exitCode === 0;
+  } catch {
+    return false;
+  }
+}
+
+function commonBinDirs(): string[] {
+  if (process.platform === "win32") {
+    const pf = process.env.ProgramFiles || "C:\\Program Files";
+    const pf86 = process.env["ProgramFiles(x86)"] || "C:\\Program Files (x86)";
+    const local = process.env.LOCALAPPDATA || join(homedir(), "AppData", "Local");
+    const choco = process.env.ChocolateyInstall || "C:\\ProgramData\\chocolatey";
+    return [
+      join(pf, "ffmpeg", "bin"),
+      join(pf86, "ffmpeg", "bin"),
+      join(local, "Microsoft", "WinGet", "Links"),
+      join(choco, "bin"),
+      join(homedir(), "scoop", "shims"),
+      join(homedir(), "scoop", "apps", "ffmpeg", "current", "bin"),
+    ];
+  }
+  return ["/opt/homebrew/bin", "/usr/local/bin", "/usr/bin"];
+}
+
+export async function detectBins(force = false): Promise<MediaBins> {
+  if (cached && !force) return cached;
+
+  const envFfmpeg = process.env.VW_FFMPEG;
+  const envFfprobe = process.env.VW_FFPROBE;
+  if (envFfmpeg && existsSync(envFfmpeg)) {
+    cached = {
+      ffmpeg: envFfmpeg,
+      ffprobe: envFfprobe && existsSync(envFfprobe) ? envFfprobe : null,
+      source: "env",
+      available: true,
+    };
+    return cached;
+  }
+
+  // 项目自带优先：换机器不用装 ffmpeg（但要能跑起来，下载被截断的包会被跳过）
+  const bundledFfmpeg = usableBin(ffmpegStaticPath);
+  if (binWorks(bundledFfmpeg)) {
+    cached = {
+      ffmpeg: bundledFfmpeg,
+      ffprobe: binWorks(usableBin(ffprobeStatic.path)) ? usableBin(ffprobeStatic.path) : null,
+      source: "bundled",
+      available: true,
+    };
+    return cached;
+  }
+
+  const pathFfmpeg = whichBin("ffmpeg");
+  const pathFfprobe = whichBin("ffprobe");
+  if (binWorks(pathFfmpeg)) {
+    cached = {
+      ffmpeg: pathFfmpeg,
+      ffprobe: binWorks(pathFfprobe) ? pathFfprobe : null,
+      source: "path",
+      available: true,
+    };
+    return cached;
+  }
+
+  const commonDirs = commonBinDirs();
+  const foundFfmpeg = commonDirs.map((d) => join(d, exeName("ffmpeg"))).find((p) => existsSync(p)) ?? null;
+  const foundFfprobe = commonDirs.map((d) => join(d, exeName("ffprobe"))).find((p) => existsSync(p)) ?? null;
+  if (foundFfmpeg) {
+    cached = { ffmpeg: foundFfmpeg, ffprobe: foundFfprobe, source: "common", available: true };
+    return cached;
+  }
+
+  cached = { ffmpeg: null, ffprobe: null, source: "none", available: false };
+  return cached;
+}
+
+// ---------------------------------------------------------------------------
+// ffprobe
+// ---------------------------------------------------------------------------
+
+export interface ProbeResult {
+  durationMs: number | null;
+  width: number | null;
+  height: number | null;
+  videoCodec: string | null;
+  audioCodec: string | null;
+  bitRate: number | null;
+}
+
+export async function probe(ffprobeBin: string, file: string): Promise<ProbeResult | null> {
+  try {
+    const proc = Bun.spawnSync(
+      [ffprobeBin, "-v", "error", "-print_format", "json", "-show_format", "-show_streams", file],
+      { stdout: "pipe", stderr: "ignore", windowsHide: true },
+    );
+    if (proc.exitCode !== 0) return null;
+    const json = JSON.parse(proc.stdout.toString()) as {
+      format?: { duration?: string; bit_rate?: string };
+      streams?: Array<{ codec_type?: string; codec_name?: string; width?: number; height?: number }>;
+    };
+    const streams = json.streams ?? [];
+    const video = streams.find((s) => s.codec_type === "video");
+    const audio = streams.find((s) => s.codec_type === "audio");
+    const durationSec = json.format?.duration ? Number(json.format.duration) : NaN;
+    return {
+      durationMs: Number.isFinite(durationSec) ? Math.round(durationSec * 1000) : null,
+      width: video?.width ?? null,
+      height: video?.height ?? null,
+      videoCodec: video?.codec_name ?? null,
+      audioCodec: audio?.codec_name ?? null,
+      bitRate: json.format?.bit_rate ? Number(json.format.bit_rate) : null,
+    };
+  } catch {
+    return null;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// ffmpeg 执行（带进度与取消）
+// ---------------------------------------------------------------------------
+
+export class CanceledError extends Error {
+  constructor() {
+    super("已取消");
+    this.name = "CanceledError";
+  }
+}
+
+function parseTimeMs(line: string): number | null {
+  const m = /time=(\d+):(\d+):(\d+(?:\.\d+)?)/.exec(line);
+  if (!m) return null;
+  return (Number(m[1]) * 3600 + Number(m[2]) * 60 + Number(m[3])) * 1000;
+}
+
+export async function runFfmpeg(opts: {
+  bin: string;
+  args: string[];
+  /** 总时长（用于进度换算），未知传 null */
+  durationMs?: number | null;
+  onProgress?: (ratio: number) => void;
+  signal?: AbortSignal;
+}): Promise<void> {
+  const { bin, args, durationMs, onProgress, signal } = opts;
+  const proc = Bun.spawn([bin, "-hide_banner", "-y", ...args], {
+    stdout: "ignore",
+    stderr: "pipe",
+    windowsHide: true,
+  });
+
+  const onAbort = () => {
+    try {
+      proc.kill();
+    } catch {
+      /* 已退出 */
+    }
+  };
+  if (signal) {
+    if (signal.aborted) onAbort();
+    else signal.addEventListener("abort", onAbort, { once: true });
+  }
+
+  let lastReported = -1;
+  const reader = proc.stderr.getReader();
+  const decoder = new TextDecoder();
+  let buf = "";
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buf += decoder.decode(value, { stream: true });
+    const lines = buf.split(/[\r\n]+/);
+    buf = lines.pop() ?? "";
+    if (onProgress && durationMs && durationMs > 0) {
+      for (const line of lines) {
+        const t = parseTimeMs(line);
+        if (t !== null) {
+          const ratio = Math.min(0.99, t / durationMs);
+          if (ratio - lastReported >= 0.02) {
+            lastReported = ratio;
+            onProgress(ratio);
+          }
+        }
+      }
+    }
+  }
+
+  const code = await proc.exited;
+  if (signal) signal.removeEventListener("abort", onAbort);
+  if (signal?.aborted) throw new CanceledError();
+  if (code !== 0) throw new Error(`ffmpeg 退出码 ${code}`);
+}
+
+// ---------------------------------------------------------------------------
+// 常用操作
+// ---------------------------------------------------------------------------
+
+/** 视频抽帧缩略图（jpg，宽 640 内） */
+export async function videoThumbnail(bin: string, input: string, output: string, atMs: number, signal?: AbortSignal) {
+  const atSec = Math.max(0, atMs / 1000).toFixed(2);
+  await runFfmpeg({
+    bin,
+    args: ["-ss", atSec, "-i", input, "-frames:v", "1", "-vf", "scale='min(640,iw)':-2", "-q:v", "4", output],
+    signal,
+  });
+}
+
+/** 图片缩略图（jpg，宽 640 内） */
+export async function imageThumbnail(bin: string, input: string, output: string, signal?: AbortSignal) {
+  await runFfmpeg({
+    bin,
+    args: ["-i", input, "-frames:v", "1", "-vf", "scale='min(640,iw)':-2", "-q:v", "4", output],
+    signal,
+  });
+}
+
+/** 音频波形图（png 640x360） */
+export async function audioWaveform(bin: string, input: string, output: string, signal?: AbortSignal) {
+  await runFfmpeg({
+    bin,
+    args: ["-i", input, "-filter_complex", "showwavespic=s=640x360:split_channels=0", "-frames:v", "1", output],
+    signal,
+  });
+}
+
+/** 抽出单声道音频，分析转写用。 */
+export async function extractAudio(
+  bin: string,
+  input: string,
+  output: string,
+  opts?: { maxSec?: number; signal?: AbortSignal },
+) {
+  const args = ["-i", input, "-vn", "-ac", "1", "-ar", "16000"];
+  if (opts?.maxSec && opts.maxSec > 0) args.push("-t", String(opts.maxSec));
+  args.push(output);
+  await runFfmpeg({ bin, args, signal: opts?.signal });
+}
+
+/** 暖米黄纸底静帧。白板动画用，换机器不依赖本机 Python。 */
+export async function paperStill(
+  bin: string,
+  output: string,
+  opts?: { color?: string; width?: number; height?: number; signal?: AbortSignal },
+) {
+  const color = (opts?.color ?? "#F5EBD7").replace(/^#/, "0x");
+  const w = opts?.width ?? 1280;
+  const h = opts?.height ?? 720;
+  await runFfmpeg({
+    bin,
+    args: ["-f", "lavfi", "-i", `color=c=${color}:s=${w}x${h}:d=1`, "-frames:v", "1", output],
+    signal: opts?.signal,
+  });
+}
+
+/** 检测 ffmpeg 是否支持 subtitles 滤镜（libass，字幕烧录用） */
+export async function hasSubtitlesFilter(bin: string): Promise<boolean> {
+  try {
+    const proc = Bun.spawnSync([bin, "-hide_banner", "-filters"], { stdout: "pipe", stderr: "ignore" });
+    return proc.stdout.toString().includes("subtitles");
+  } catch {
+    return false;
+  }
+}
+
+/** 裁成 16:9 或 9:16，居中切 */
+export async function cropAspect(
+  bin: string,
+  input: string,
+  output: string,
+  ratio: "16:9" | "9:16",
+  signal?: AbortSignal,
+) {
+  const vf =
+    ratio === "9:16"
+      ? "scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920"
+      : "scale=1920:1080:force_original_aspect_ratio=increase,crop=1920:1080";
+  await runFfmpeg({
+    bin,
+    args: ["-i", input, "-vf", vf, "-c:v", "libx264", "-crf", "23", "-preset", "veryfast", "-an", "-movflags", "+faststart", output],
+    signal,
+  });
+}
+
+/** 两段视频首尾相接 */
+export async function concatVideos(
+  bin: string,
+  a: string,
+  b: string,
+  output: string,
+  signal?: AbortSignal,
+) {
+  await runFfmpeg({
+    bin,
+    args: [
+      "-i", a, "-i", b,
+      "-filter_complex", "[0:v]scale=1280:-2,setsar=1[v0];[1:v]scale=1280:-2,setsar=1[v1];[v0][v1]concat=n=2:v=1:a=0[v]",
+      "-map", "[v]",
+      "-c:v", "libx264", "-crf", "23", "-preset", "veryfast",
+      "-movflags", "+faststart",
+      output,
+    ],
+    signal,
+  });
+}
+
+/** 把一行字烧成底部字幕 */
+export async function burnCaption(
+  bin: string,
+  input: string,
+  output: string,
+  text: string,
+  signal?: AbortSignal,
+) {
+  const safe = text.replace(/[:\\'[\]%]/g, " ").replace(/\s+/g, " ").trim().slice(0, 40);
+  await runFfmpeg({
+    bin,
+    args: [
+      "-i", input,
+      "-vf", `drawtext=text='${safe || " "}':fontsize=36:fontcolor=white:borderw=2:x=(w-text_w)/2:y=h-80`,
+      "-c:v", "libx264", "-crf", "23", "-preset", "veryfast",
+      "-c:a", "copy",
+      "-movflags", "+faststart",
+      output,
+    ],
+    signal,
+  });
+}
+
+/** 任意素材转成可预览的 mp4（画布 ffmpeg 节点用） */
+export async function transcodeMp4(
+  bin: string,
+  input: string,
+  output: string,
+  opts?: { signal?: AbortSignal; durationMs?: number },
+) {
+  await runFfmpeg({
+    bin,
+    args: [
+      "-i", input,
+      "-vf", "scale=-2:'min(720,ih)'",
+      "-c:v", "libx264", "-crf", "23", "-preset", "veryfast",
+      "-c:a", "aac", "-b:a", "128k",
+      "-movflags", "+faststart",
+      output,
+    ],
+    durationMs: opts?.durationMs,
+    signal: opts?.signal,
+  });
+}
+
+/** 视频代理（720p h264 + aac，faststart），进度 0-1 */
+export async function videoProxy(
+  bin: string,
+  input: string,
+  output: string,
+  durationMs: number | null,
+  onProgress?: (ratio: number) => void,
+  signal?: AbortSignal,
+) {
+  await runFfmpeg({
+    bin,
+    args: [
+      "-i", input,
+      "-vf", "scale=-2:'min(720,ih)'",
+      "-c:v", "libx264", "-crf", "28", "-preset", "veryfast",
+      "-c:a", "aac", "-b:a", "96k",
+      "-movflags", "+faststart",
+      output,
+    ],
+    durationMs,
+    onProgress,
+    signal,
+  });
+}
