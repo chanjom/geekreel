@@ -161,7 +161,8 @@ function recolorCss(css: string, color: string): string {
 /** .env 里改写或追加一个变量，保留注释与顺序 */
 function setEnv(text: string, key: string, value: string): string {
   const line = `${key}=${value}`;
-  const re = new RegExp(`^[#\\s]*${key}=.*$`, "m");
+  // 只吃同一行里的 "#" 和空格，不能用 \s（会跨行把上一条注释也吞掉）
+  const re = new RegExp(`^[#\\t ]*${key}=.*$`, "m");
   if (re.test(text)) return text.replace(re, line);
   const trimmed = text.replace(/\s*$/, "");
   return `${trimmed}\n${line}\n`;
@@ -200,27 +201,29 @@ const ask = async (q: string, dft?: string) => {
 
 let name = args.name;
 if (!name) {
-  console.log("\n这个脚本会把项目改成你自己的产品。先回答三个问题，直接回车用默认值。\n");
+  if (args.yes) fail("--yes 模式不会提问，请用 --name 指定产品名");
+  console.log("\n这个脚本会把项目改成你自己的产品。先回答几个问题，直接回车用默认值。\n");
   name = await ask("产品名", "我的短剧工作室");
 }
 name = name.trim();
 if (!name) fail("产品名不能为空");
 
+// --yes 表示「不问，缺的都用默认值」，避免在脚本 / CI 里卡住等输入
 let tagline = args.tagline;
-if (tagline === undefined) tagline = await ask("副标题（显示在产品名下面）", "AI 短剧工厂");
+if (tagline === undefined) tagline = args.yes ? "AI Studio" : await ask("副标题（显示在产品名下面）", "AI 短剧工厂");
 tagline = tagline.trim();
 
 const title = (args.title ?? `${name}${tagline ? ` · ${tagline}` : ""}`).trim();
 
 let color = args.color;
-if (!color) color = await ask("主题色 #rrggbb（回车保留原来的琥珀金）", "#f5b53f");
+if (!color) color = args.yes ? "#f5b53f" : await ask("主题色 #rrggbb（回车保留原来的琥珀金）", "#f5b53f");
 color = color.trim();
 if (!/^#?[0-9a-fA-F]{6}$/.test(color)) fail(`主题色要写成 #rrggbb，收到的是：${color}`);
 if (!color.startsWith("#")) color = `#${color}`;
 
 let slug = args.slug;
 if (slug === undefined) {
-  slug = await ask("仓库 / 包名（英文小写，可留空不改）", "");
+  slug = args.yes ? "" : await ask("仓库 / 包名（英文小写，可留空不改）", "");
 }
 slug = (slug ?? "").trim();
 
@@ -301,17 +304,25 @@ if (args.resetGit) {
 rl.close();
 
 console.log(`
-✓ 改完了。四件事：
+✓ 改完了。生效方式不一样，别搞混：
 
-  1. 重新编译前端      bun run build
-  2. 启动看效果        bun apps/server/src/index.ts
-  3. 浏览器标题 / 侧栏 / 登录页 / 邮件标题 都会变成「${name}」
-  4. 换 logo 的话把 512×512 的 jpg 放到 apps/web/public/logo.jpg
+  立刻生效（重启服务即可，不重编）
+    名字、副标题        → .env 里的 VW_SITE_NAME / VW_SITE_TAGLINE
+
+  必须重编前端才生效
+    主题色、浏览器标题、logo、README 第一行
+        bun run build
+        # Docker 部署：docker compose up -d --build
+
+  重编后启动：
+        bun apps/server/src/index.ts
+
+  换 logo 的话，把 512×512 的 jpg 放到 apps/web/public/logo.jpg（或下次用 --logo 传）
 
 还想改的（这些没法自动换，得手改）：
   · 登录页左侧营销文案   apps/web/src/components/authShell.tsx
   · README 正文里的介绍  按你的产品重写
   · 许可证               LICENSE 现在是 Unlicense，商用/闭源都行，换成你的也可以
 
-${args.resetGit ? "" : "注意：.env 已被 .gitignore 忽略，换的只是本机。要让别人也用这个名字，把 VW_SITE_NAME 写进部署环境变量。"}
+${args.resetGit ? "" : "注意：.env 已被 .gitignore 忽略，换的只是本机。要让部署出去的站也用这个名字，把 VW_SITE_NAME 写进环境变量。"}
 `);
