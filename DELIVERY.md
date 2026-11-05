@@ -3,7 +3,7 @@
 这个包是完整的、可运行的源码。解压就能跑，不需要再找我拿别的东西。
 
 - 版本：`0.2.0`
-- 提交：`4d4b35b`（仓库 <https://github.com/chanjom/geekreel>）
+- 提交：`d88ec18`（仓库 <https://github.com/chanjom/geekreel>）
 - 许可证：Unlicense（可改名、可闭源、可商用、可再发布）
 
 ---
