@@ -3,7 +3,7 @@
 这个包是完整的、可运行的源码。解压就能跑，不需要再找我拿别的东西。
 
 - 版本：`0.2.0`
-- 提交：`d88ec18`（仓库 <https://github.com/chanjom/geekreel>）
+- 提交：`66c27bd`（仓库 <https://github.com/chanjom/geekreel>）
 - 许可证：Unlicense（可改名、可闭源、可商用、可再发布）
 
 ---
@@ -12,12 +12,13 @@
 
 ```
 geekreel-0.2.0/
-├── 交付说明.md            ← 你正在看的这份
+├── DELIVERY.md            ← 你正在看的这份
 ├── README.md              项目介绍、功能清单、界面截图
 ├── .env.example           所有配置项，每项都有注释
 ├── scripts/
 │   ├── setup.sh           ← macOS / Linux 一键装并启动
 │   ├── setup.cmd          ← Windows 一键装并启动
+│   ├── rebrand.sh / .cmd  ← 改成你自己的产品（改名、换色、换 logo）
 │   ├── dev.sh / dev.cmd   开发态（改代码热更新）
 │   └── start.sh / .cmd    只启动，不重装
 ├── docs/
@@ -68,11 +69,27 @@ docker compose up -d --build
 
 ### C. 改成自己的产品
 
-1. 解压后 `rm -rf .git`（包里本来就没有）
-2. 改 `.env` 的 `VW_SITE_NAME`、替换 `apps/web/public/logo.jpg`
-3. `git init` + 推到自己的仓库，或者 `docker build` 打自己的镜像
+一条命令：
 
-想改代码从哪下手：[docs/FORK.md](docs/FORK.md)
+```bash
+./scripts/rebrand.sh --name "你的产品名" --tagline "你的副标题" --color "#e05a3a"
+# Windows: scripts\rebrand.cmd --name "..." --tagline "..." --color "#..."
+```
+
+它会把产品名、副标题、浏览器标题、主题色（深/浅/护眼三套一起）、README 标题、
+包名改掉，`--logo 路径` 还能换 logo，`--reset-git` 顺手清空原仓库历史。
+改完 `bun run build` 生效。
+
+只想临时换名、还要跟上游同步更新的话，别跑脚本，在 `.env` 里写两行就够：
+
+```ini
+VW_SITE_NAME=你的产品名
+VW_SITE_TAGLINE=你的副标题
+```
+
+重启即可，不用重编。名字会同时出现在侧栏、登录页、浏览器标签、邮件标题。
+
+想删模块、改 UI、接新模型厂商从哪下手：[docs/FORK.md](docs/FORK.md)
 
 ---
 
