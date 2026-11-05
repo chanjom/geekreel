@@ -211,7 +211,33 @@ export const doubaoSeedance: ModelAdapter = {
   configFields: [
     { key: "baseUrl", label: "Base URL", type: "text", placeholder: "https://ark.cn-beijing.volces.com/api/v3" },
     { key: "apiKey", label: "API Key", type: "password", required: true },
-    { key: "model", label: "模型名", type: "text", required: true, placeholder: "doubao-seedance-1-0-pro" },
+    { key: "model", label: "模型名", type: "text", required: true, placeholder: "doubao-seedance-2-0-fast-260128" },
+    {
+      key: "ratio",
+      label: "画幅",
+      type: "select",
+      defaultValue: "9:16",
+      options: [
+        { value: "9:16", label: "9:16 竖屏（短剧）" },
+        { value: "16:9", label: "16:9 横屏" },
+        { value: "1:1", label: "1:1 方形" },
+        { value: "3:4", label: "3:4 竖版" },
+        { value: "4:3", label: "4:3 横版" },
+        { value: "21:9", label: "21:9 宽银幕" },
+        { value: "adaptive", label: "跟随首帧图片" },
+      ],
+    },
+    {
+      key: "resolution",
+      label: "分辨率",
+      type: "select",
+      defaultValue: "720p",
+      options: [
+        { value: "480p", label: "480p 最省额度" },
+        { value: "720p", label: "720p 推荐" },
+        { value: "1080p", label: "1080p 最清晰" },
+      ],
+    },
   ],
 
   async test(config): Promise<TestResult> {
@@ -249,6 +275,9 @@ export const doubaoSeedance: ModelAdapter = {
           })),
         ],
         duration: req.durationSec || 5,
+        ...(config.ratio ? { ratio: config.ratio } : {}),
+        ...(config.resolution ? { resolution: config.resolution } : {}),
+        watermark: false,
       }),
       signal: req.signal ?? null,
     });

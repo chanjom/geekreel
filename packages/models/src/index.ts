@@ -369,6 +369,11 @@ export const openaiCompatible: ModelAdapter = {
       // 未签免责声明的账号会被忽略，签了才会真正去掉「AI生成」水印。
       body.watermark_enabled = false;
     }
+    if (/volces\.com/.test(config.baseUrl ?? "")) {
+      // 火山方舟默认给图打「AI生成」水印，定妆图必须显式关掉。
+      body.watermark = false;
+      body.response_format = "url";
+    }
     if (req.refs?.[0] && /gpt-image/i.test(config.model ?? "")) {
       body.image = `data:${req.refs[0].mime || "image/png"};base64,${
         typeof Buffer !== "undefined"

@@ -90,10 +90,10 @@ export const modelPresets: ModelPreset[] = [
   {
     id: "doubao-text",
     name: "豆包",
-    hint: "到 ark.volcengine.com 复制 API Key。模型名按控制台接入点改。",
+    hint: "到 ark.volcengine.com 复制 API Key，并先在「开通管理」开通模型，否则报 ModelNotOpen。模型名可在控制台复制。",
     capability: "llm",
     adapterType: "openai-compatible",
-    config: { baseUrl: "https://ark.cn-beijing.volces.com/api/v3", model: "doubao-1-5-pro-32k-250115" },
+    config: { baseUrl: "https://ark.cn-beijing.volces.com/api/v3", model: "doubao-seed-2-1-turbo-260628" },
     secretKeys: ["apiKey"],
     vision: true,
   },
@@ -145,10 +145,10 @@ export const modelPresets: ModelPreset[] = [
   {
     id: "doubao-image",
     name: "豆包生图",
-    hint: "到 ark.volcengine.com 复制 API Key。默认 Seedream，不对再改模型名。",
+    hint: "到 ark.volcengine.com 复制 API Key，并先在「开通管理」开通 Seedream。模型名带日期后缀，可在控制台复制。",
     capability: "image",
     adapterType: "openai-compatible",
-    config: { baseUrl: "https://ark.cn-beijing.volces.com/api/v3", model: "doubao-seedream-4-0-250828" },
+    config: { baseUrl: "https://ark.cn-beijing.volces.com/api/v3", model: "doubao-seedream-5-0-flash-260915" },
     secretKeys: ["apiKey"],
   },
   {
@@ -200,10 +200,10 @@ export const modelPresets: ModelPreset[] = [
   {
     id: "seedance",
     name: "豆包 Seedance",
-    hint: "到 ark.volcengine.com 复制 API Key。模型名已填官方常用名，不对再去编辑改。",
+    hint: "到 ark.volcengine.com 复制 API Key，并先在「开通管理」开通 Seedance。模型名必须带日期后缀，旧名会报 404。",
     capability: "video",
     adapterType: "doubao-seedance",
-    config: { baseUrl: "https://ark.cn-beijing.volces.com/api/v3", model: "doubao-seedance-1-0-pro" },
+    config: { baseUrl: "https://ark.cn-beijing.volces.com/api/v3", model: "doubao-seedance-2-0-fast-260128", ratio: "9:16", resolution: "720p" },
     secretKeys: ["apiKey"],
   },
   {
