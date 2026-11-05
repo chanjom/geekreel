@@ -4,7 +4,7 @@
  */
 
 import { createHmac } from "node:crypto";
-import { collectVideoImages } from "./blobs";
+import { collectVideoImages, collectVideoImagesWithRoles } from "./blobs";
 import type { ModelAdapter, TestResult } from "./index";
 
 export function jwtHs256(payload: Record<string, unknown>, secret: string): string {
@@ -262,26 +262,38 @@ export const doubaoSeedance: ModelAdapter = {
   async generateVideo(config, req) {
     const headers = { "Content-Type": "application/json", Authorization: `Bearer ${config.apiKey ?? ""}` };
     const base = config.baseUrl || "https://ark.cn-beijing.volces.com/api/v3";
-    const create = await fetch(joinUrl(base, "/contents/generations/tasks"), {
-      method: "POST",
-      headers,
-      body: JSON.stringify({
+    const imgs = collectVideoImagesWithRoles(req);
+    const body = (mode: "roles" | "first") => {
+      const picked = mode === "roles" ? imgs : imgs.slice(0, 1).map((x) => ({ image: x.image }));
+      return JSON.stringify({
         model: config.model,
         content: [
           { type: "text", text: req.prompt },
-          ...collectVideoImages(req).map((img) => ({
+          ...picked.map(({ image, role }: { image: { mime: string; data: Uint8Array }; role?: string }) => ({
             type: "image_url",
-            image_url: { url: `data:${img.mime || "image/png"};base64,${Buffer.from(img.data).toString("base64")}` },
+            image_url: { url: `data:${image.mime || "image/png"};base64,${Buffer.from(image.data).toString("base64")}` },
+            ...(role ? { role } : {}),
           })),
         ],
         duration: req.durationSec || 5,
         ...(config.ratio ? { ratio: config.ratio } : {}),
         ...(config.resolution ? { resolution: config.resolution } : {}),
         watermark: false,
-      }),
-      signal: req.signal ?? null,
-    });
-    if (!create.ok) throw new Error(await readError(create));
+      });
+    };
+    const endpoint = joinUrl(base, "/contents/generations/tasks");
+    let create = await fetch(endpoint, { method: "POST", headers, body: body("roles"), signal: req.signal ?? null });
+    if (!create.ok) {
+      const first = await readError(create);
+      // 首帧+尾帧会被认成首尾接片（flf2v），1.0 系列不支持这种任务类型。
+      // 带上角色被拒时退回只发首帧，画面照样动起来，只是不锁尾帧。
+      if (imgs.length > 1 && /task_type|flf2v|role|not support|not valid/i.test(first)) {
+        create = await fetch(endpoint, { method: "POST", headers, body: body("first"), signal: req.signal ?? null });
+        if (!create.ok) throw new Error(await readError(create));
+      } else {
+        throw new Error(first);
+      }
+    }
     const created = (await create.json()) as { id?: string };
     if (!created.id) throw new Error("豆包没有返回任务 id");
 

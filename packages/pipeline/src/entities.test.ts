@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import type { CharacterDossier, DramaBible } from "@vw/core";
-import { bindEntitiesToShots, castLockLine, lockProductionIntoPrompt, pickShotRefImages, viewPrompt } from "./entities";
+import { bindEntitiesToShots, castLockLine, leadCharacterForShot, lockProductionIntoPrompt, pickShotRefImages, viewPrompt } from "./entities";
 
 const wu: CharacterDossier = {
   id: "C01",
@@ -105,4 +105,14 @@ test("档案漏写毛色时按物种补一句，老虎不会一镜一个色", ()
   expect(line).toContain("毛色固定为橘黄底黑色横纹");
   const stated: CharacterDossier = { ...tiger, appearance: "毛色橘黄，黑色横纹" };
   expect(castLockLine({ cast: [stated], assets: [] }, "老虎扑来")).not.toContain("毛色固定为");
+});
+
+test("这一镜谁在画面里，就以谁的脸为准", () => {
+  const girl: CharacterDossier = { ...wu, id: "C02", name: "红裙小女孩", imageAssetId: "img-girl" };
+  const bible: DramaBible = { cast: [wu, girl], assets: [] } as DramaBible;
+  const shot = { entityIds: ["C01", "C02"], visual: "小女孩伸手接过餐盒", line: "谢谢叔叔" };
+  expect(leadCharacterForShot(bible, shot)?.id).toBe("C02");
+  expect(leadCharacterForShot(bible, { entityIds: ["C01"], visual: "武松提棍上冈" })?.id).toBe("C01");
+  // 都不点名就退回演员表第一个，不乱猜
+  expect(leadCharacterForShot(bible, { entityIds: ["C02", "C01"], visual: "冈上血泊" })?.id).toBe("C01");
 });

@@ -330,7 +330,7 @@ function TimelineEditor({ projectId }: { projectId: string }) {
       {/* 工具栏 */}
       {lipsNotes.length > 0 ? (
         <p className="mb-2 rounded-lg border border-amber-900/50 bg-amber-950/30 px-3 py-2 text-xs text-amber-200">
-          {lipsNotes.length} 镜对口型没过。原视频还在，没有改成静帧。{lipsNotes[0]?.lipsNote}
+          {lipsNotes.length} 镜没对口型，画面照原样保留，配音走音轨。{lipsNotes[0]?.lipsNote}
         </p>
       ) : null}
       <p className="mb-2 text-[11px] text-fg-faint">出片后画面和字幕会自动装上。对白先配音再对嘴；旁白只铺声，不对口型。</p>

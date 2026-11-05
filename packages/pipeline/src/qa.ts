@@ -45,6 +45,7 @@ export function qaReviewPrompt(opts: { visual: string; lock: string }): string {
   return `对照参考图检查这一镜。同一张脸？同一套衣服？场景有没有换地方？
 画面：${opts.visual}
 锁定：${opts.lock}
+不看口型、不看台词有没有念出来——声音是另铺在音轨上的，人没张嘴不算问题。
 只输出 JSON：{"ok":true,"score":0.9,"note":"一句话"}
 score 从 0 到 1。漂脸、换装、换场景就 ok=false。`;
 }

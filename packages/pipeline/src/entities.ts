@@ -62,6 +62,45 @@ export function allEntityImageIds(e: { imageAssetId?: string | null; views?: Ent
   return [...new Set(ids)];
 }
 
+/** 名字在画面描述里出现得越多，越可能是这一镜的主角。 */
+function nameHitScore(text: string, name: string): number {
+  if (!text || !name) return 0;
+  if (text.includes(name)) return 4;
+  // 「红裙小女孩」这种带定语的写法，退一步看后三个字。
+  for (const cut of [3, 2]) {
+    const tail = name.slice(-cut);
+    if (tail.length >= 2 && text.includes(tail)) return cut === 3 ? 2 : 1;
+  }
+  const chars = [...name].filter((c) => /[\u4e00-\u9fa5]/.test(c));
+  const hit = chars.filter((c) => text.includes(c)).length;
+  return chars.length >= 4 && hit >= chars.length - 1 ? 1 : 0;
+}
+
+/**
+ * 这一镜该以谁为准：台词和画面里点到名的角色优先，
+ * 否则退回 entityIds 的第一个。免得女孩说话却拿外卖员的脸去质检。
+ */
+export function leadCharacterForShot(
+  bible: Pick<DramaBible, "cast">,
+  shot: Pick<DramaShot, "entityIds" | "visual" | "line">,
+): CharacterDossier | null {
+  const cast = (bible.cast ?? []).filter((c) => c.id && c.name);
+  if (!cast.length) return null;
+  const allowed = shot.entityIds?.length ? cast.filter((c) => shot.entityIds!.includes(c.id)) : cast;
+  const pool = allowed.length ? allowed : cast;
+  const text = `${shot.visual ?? ""}\n${shot.line ?? ""}`;
+  let best = pool[0]!;
+  let bestScore = 0;
+  for (const c of pool) {
+    const score = nameHitScore(text, c.name);
+    if (score > bestScore) {
+      best = c;
+      bestScore = score;
+    }
+  }
+  return best;
+}
+
 export function mergeEntityViews(current: EntityView[] | undefined, next: EntityView): EntityView[] {
   const rest = (current ?? []).filter((v) => v.kind !== next.kind);
   return [...rest, next];

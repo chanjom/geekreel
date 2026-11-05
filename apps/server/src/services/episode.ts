@@ -22,6 +22,7 @@ import {
   parseShotQa,
   pickShotRefImages,
   primaryEntityImage,
+  leadCharacterForShot,
   qaReviewPrompt,
   shouldRetryQa,
   shotDurationSec,
@@ -60,6 +61,14 @@ function audioBytes(assetId: string | null | undefined): { mime: string; data: U
   const row = db.query("SELECT path FROM assets WHERE id = ? AND type = 'audio'").get(assetId) as { path: string } | null;
   if (!row) return undefined;
   return { mime: mimeFromExt(extFromFileName(row.path) || "mp3"), data: new Uint8Array(readFileSync(absInLibrary(row.path))) };
+}
+
+/** 已经出来的视频。对口型要基于它，不能拿静帧重来。 */
+function videoBytes(assetId: string | null | undefined): { mime: string; data: Uint8Array } | undefined {
+  if (!assetId) return undefined;
+  const row = db.query("SELECT path FROM assets WHERE id = ? AND type = 'video'").get(assetId) as { path: string } | null;
+  if (!row) return undefined;
+  return { mime: mimeFromExt(extFromFileName(row.path) || "mp4"), data: new Uint8Array(readFileSync(absInLibrary(row.path))) };
 }
 
 export const renderEpisodeHandler: JobHandler = async (job, ctx) => {
@@ -102,6 +111,7 @@ export const renderEpisodeHandler: JobHandler = async (job, ctx) => {
   let lastFrameId: string | null = null;
   let lastFrameDesc = "";
   let lipsMissed = 0;
+  let lipsSkipped = 0;
   const shots: DramaShot[] = [];
 
   for (let i = 0; i < ep.shots.length; i++) {
@@ -119,18 +129,18 @@ export const renderEpisodeHandler: JobHandler = async (job, ctx) => {
       shot,
     });
     const refIds = pickShotRefImages(bible, shot.entityIds, lastFrameId ? [lastFrameId] : []);
-    const faceId =
-      (bible.cast ?? [])
-        .filter((c) => !shot.entityIds?.length || shot.entityIds.includes(c.id))
-        .map((c) => primaryEntityImage(c))
-        .find(Boolean) ?? refIds[0];
+    // 这一镜画面/台词里点到谁，就以谁为准；都不提才退回第一个出场角色。
+    const lead = leadCharacterForShot(bible, shot);
+    const faceId = (lead ? primaryEntityImage(lead) : null) ?? refIds[0];
     const refs = refIds.map((id) => imageBytes(id)).filter((x): x is NonNullable<typeof x> => Boolean(x));
-    const startImage = imageBytes(faceId) ?? imageBytes(lastFrameId) ?? refs[0];
+    // 续拍优先接上一镜的尾帧，场景和光才连得上；定妆照只当参考图，不抢首帧。
+    let startImage = imageBytes(lastFrameId) ?? imageBytes(faceId) ?? refs[0];
 
     let imageAssetId: string | null = lastFrameId ?? refIds[0] ?? null;
     let videoAssetId: string | null = null;
     let audioAssetId: string | null = null;
     let lipSynced = false;
+    let videoError: string | null = null;
     let lipsNote: string | null = null;
     let paintedId: string | null = null;
     let outputFrameId: string | null = null;
@@ -156,7 +166,20 @@ export const renderEpisodeHandler: JobHandler = async (job, ctx) => {
       return asset.id;
     };
 
-    if (!imageAssetId) {
+    // 一集的头一镜没有上一帧可接。直接拿定妆照当首帧会出白底棚，场景全靠提示词碰运气。
+    // 先画一张这一镜的分镜图（人物+场景），再拿它去图生视频。一张图换一镜的稳定，划算。
+    if (imageAd?.generateImage && imageEp && !lastFrameId) {
+      try {
+        paintedId = await paintStill(prompt);
+        if (paintedId) {
+          imageAssetId = paintedId;
+          outputFrameId = paintedId;
+          startImage = imageBytes(paintedId) ?? startImage;
+        }
+      } catch {
+        /* 画不出来就退回定妆照，别卡住整集 */
+      }
+    } else if (!imageAssetId) {
       try {
         paintedId = await paintStill(prompt);
         imageAssetId = paintedId ?? imageAssetId;
@@ -240,7 +263,9 @@ export const renderEpisodeHandler: JobHandler = async (job, ctx) => {
     if (videoAd?.generateVideo && videoEp) {
       try {
         await makeVideo(prompt);
-      } catch {
+      } catch (e) {
+        // 别把原因吞掉。画面退回静帧时，得让人知道是模型报错还是额度用完。
+        videoError = e instanceof Error ? e.message : String(e);
         videoAssetId = null;
         lipSynced = false;
       }
@@ -271,29 +296,23 @@ export const renderEpisodeHandler: JobHandler = async (job, ctx) => {
       if (spoken) audioAssetId = spoken.assetId;
     }
 
-    if (shot.line.trim() && audioAssetId && (videoAd?.lipSync || videoAd?.generateVideo) && videoEp) {
+    // 只有真能对口型的模型才跑第二遍。不能出声的模型再生成一次只会把动起来的镜头
+    // 退回静帧，还白烧一遍视频额度——配音直接走下面的音轨。
+    if (shot.line.trim() && audioAssetId && videoAd?.lipSync && videoEp) {
       const still = imageBytes(imageAssetId) ?? startImage;
       const voice = audioBytes(audioAssetId);
-      if (still && voice) {
+      const motion = videoBytes(videoAssetId);
+      if (voice && (motion || still)) {
         try {
           ctx.progress(0.08 + ((i + 0.7) / ep.shots.length) * 0.8, `第 ${i + 1} 镜对口型`);
-          const lip = videoAd.lipSync
-            ? await videoAd.lipSync(videoEp.config, {
-                image: still,
-                audio: voice,
-                text: shot.line,
-                durationSec: durSec,
-                signal: ctx.signal,
-              })
-            : await videoAd.generateVideo!(videoEp.config, {
-                prompt: `${prompt}\n这是对口型那一道：嘴必须对上台词。`,
-                durationSec: durSec,
-                image: still,
-                dialogue: shot.line,
-                audio: true,
-                voice,
-                signal: ctx.signal,
-              });
+          const lip = await videoAd.lipSync(videoEp.config, {
+            image: still,
+            video: motion,
+            audio: voice,
+            text: shot.line,
+            durationSec: durSec,
+            signal: ctx.signal,
+          });
           const asset = storeAsset({
             type: "video",
             title: `${bible.title} E${ep.index}-${i + 1}对口型`,
@@ -325,10 +344,21 @@ export const renderEpisodeHandler: JobHandler = async (job, ctx) => {
           : "有台词但缺定妆或配音，嘴没动。";
       }
     } else if (shot.line.trim() && !lipSynced) {
-      lipsMissed += 1;
-      lipsNote = videoAssetId
-        ? "有台词。视频模型不会对口型，原视频保留，配音另铺。"
-        : "有台词但对口型没跑成。没有用静帧冒充说话。";
+      if (videoAd?.generateVideo && !videoAd.lipSync && videoAssetId) {
+        // 模型没有对口型能力，别再拿静帧重生成一遍。配音已经铺进音轨，画面照用它动的。
+        lipsSkipped += 1;
+        lipsNote = "这个视频模型不会对口型，画面保留原样，配音走音轨。";
+      } else {
+        lipsMissed += 1;
+        lipsNote = videoAssetId
+          ? "有台词但对口型没跑成。原视频保留，配音另铺。"
+          : "有台词但对口型没跑成。没有用静帧冒充说话。";
+      }
+    }
+
+    // 视频没出来就别装作是「对口型没过」。原因写清楚，人才知道该查额度还是改提示词。
+    if (videoError && !videoAssetId) {
+      lipsNote = `这一镜视频没出来：${videoError}。先用分镜图顶上，配音照铺。`;
     }
 
     if (!videoAssetId && !imageAssetId) {
@@ -447,7 +477,9 @@ export const renderEpisodeHandler: JobHandler = async (job, ctx) => {
   ctx.progress(
     1,
     [
-      lipsMissed ? `${lipsMissed} 镜对口型没过，原视频还在` : "对口型过了",
+      lipsMissed ? `${lipsMissed} 镜对口型没过，原视频还在` : "",
+      lipsSkipped ? `${lipsSkipped} 镜按音轨配音（模型不会对口型）` : "",
+      lipsMissed || lipsSkipped ? "" : "对口型过了",
       qaMissed ? `${qaMissed} 镜质检没过` : "质检过了",
       bible.bgmAssetId ? "配乐已压过人声" : "",
       bible.ambienceAssetId ? "环境底铺了" : "",
@@ -460,6 +492,7 @@ export const renderEpisodeHandler: JobHandler = async (job, ctx) => {
     episodeIndex: ep.index,
     shotCount: shots.length,
     lipsMissed,
+    lipsSkipped,
     portrait: true,
   };
 };
