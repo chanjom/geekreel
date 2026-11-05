@@ -151,4 +151,13 @@ createdAt / updatedAt
 
 **视频模型没开通会退化成静帧。** 豆包 Seedance 之类未开通时，`pipeline.episode` 的每个镜头都会退回图片，最终合成出来是"一张张图配字幕"，看起来像 PPT 但接口是成功的。`episode.ts` 因此额外回报 `videoCount` / `videoFailed` / `videoErrors`，出片卡片在 `videoCount === 0` 时显示红色警告，不让你拿这种片子去交付。
 
+两种常见的"只剩静帧"：
+
+| 报错 | 意思 | 怎么办 |
+|---|---|---|
+| `has not activated the model doubao-seedance-…` | 这个模型你根本没开通（火山方舟里要单独激活，同一个 key 不代表所有模型都能用） | 控制台激活该模型，或换一个已开通的 |
+| `has reached the set usage limit … "Safe Experience Mode"` | 开通了，但走的是免费试用额度，额度用完了 | 关掉「安全体验模式」/ 充值 |
+
+同一部片子里 `videoCount=2, videoFailed=1` 这种就是第二种：模型通、额度中途用完。此时成片能出，但有一镜是静的 —— 要补就整集重跑（换端点或充值后），单镜补不了。
+
 **方案估算不等于真实账单。** `estimatedYuan` 是模型按每集 1.5 元随口估的，实际以 `model_usage` 汇总为准。

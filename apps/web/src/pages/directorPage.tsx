@@ -438,9 +438,11 @@ function renderCard(run: Run) {
     const videoFailed = Number(d.videoFailed ?? 0);
     const errors = (d.videoErrors as string[] | undefined) ?? [];
     const noVideo = shotCount > 0 && videoCount === 0;
+    const partial = !noVideo && videoFailed > 0;
+    const stills = shotCount - videoCount;
     return (
       <section className="rounded-2xl border border-line bg-panel p-5">
-        <h2 className="text-base font-semibold">{noVideo ? "第 1 集只有图片" : "第 1 集出来了"}</h2>
+        <h2 className="text-base font-semibold">{noVideo ? "第 1 集只有图片" : partial ? "第 1 集出来了，有几镜是静的" : "第 1 集出来了"}</h2>
 
         {noVideo && (
           <div className="mt-3 rounded-xl border border-red-500/40 bg-red-500/10 px-3 py-2.5">
@@ -450,6 +452,18 @@ function renderCard(run: Run) {
             {errors.length > 0 && <p className="mt-1 break-all text-[11px] text-red-300/80">{errors[0]}</p>}
             <p className="mt-1.5 text-[11px] leading-relaxed text-fg-dim">
               多半是视频模型没开通或者额度用完了，去「模型」页试一下那个视频端点，修好回来点「重出这一集」。
+            </p>
+          </div>
+        )}
+
+        {partial && (
+          <div className="mt-3 rounded-xl border border-amber-500/40 bg-amber-500/10 px-3 py-2.5">
+            <p className="text-xs font-medium text-amber-300">
+              {videoFailed} 个镜头没出视频，用的是静帧（{videoCount} 个真视频 / {stills} 张静图）。成片能出，但那几秒人物不会动。
+            </p>
+            {errors.length > 0 && <p className="mt-1 break-all text-[11px] text-amber-300/80">{errors[0]}</p>}
+            <p className="mt-1.5 text-[11px] leading-relaxed text-fg-dim">
+              常见原因是额度中途用完（豆包「安全体验模式」、通义免费额度）。充值或换视频端点后整集重跑——单镜补不了。
             </p>
           </div>
         )}
