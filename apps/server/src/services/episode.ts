@@ -113,6 +113,8 @@ export const renderEpisodeHandler: JobHandler = async (job, ctx) => {
   let lipsMissed = 0;
   let lipsSkipped = 0;
   const shots: DramaShot[] = [];
+  /** 每一镜到底出了视频没有。全没出就是「图片 + 字幕」的幻灯片，得告诉上层。 */
+  const videoResults: Array<{ videoId: string | null; error: string | null }> = [];
 
   for (let i = 0; i < ep.shots.length; i++) {
     const shot = ep.shots[i]!;
@@ -361,6 +363,8 @@ export const renderEpisodeHandler: JobHandler = async (job, ctx) => {
       lipsNote = `这一镜视频没出来：${videoError}。先用分镜图顶上，配音照铺。`;
     }
 
+    videoResults.push({ videoId: videoAssetId, error: videoError });
+
     if (!videoAssetId && !imageAssetId) {
       throw new Error(`第 ${i + 1} 镜没出成。检查图片或视频模型，再点出这一集。`);
     }
@@ -487,10 +491,14 @@ export const renderEpisodeHandler: JobHandler = async (job, ctx) => {
       .filter(Boolean)
       .join("，"),
   );
+  const videoCount = videoResults.filter((v) => v.videoId).length;
   return {
     projectId,
     episodeIndex: ep.index,
     shotCount: shots.length,
+    videoCount,
+    videoFailed: videoResults.length - videoCount,
+    videoErrors: [...new Set(videoResults.map((v) => v.error).filter((e): e is string => Boolean(e)))].slice(0, 2),
     lipsMissed,
     lipsSkipped,
     portrait: true,

@@ -3,6 +3,7 @@ import { usePrefs, type LocaleId } from "./prefs";
 const zh = {
   nav: {
     home: "首页",
+    director: "导演模式",
     drama: "小说转短剧",
     series: "连载",
     radar: "雷达",
@@ -71,6 +72,7 @@ const zh = {
 const en: typeof zh = {
   nav: {
     home: "Home",
+    director: "Director",
     drama: "Novel to drama",
     series: "Series",
     radar: "Radar",

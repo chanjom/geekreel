@@ -132,8 +132,13 @@ export function parseBibleRevise(text: string, current: DramaBible): DramaBible 
   }
   const doc = parseCastDoc(JSON.stringify(json), current.title);
   const oldById = new Map((current.cast ?? []).map((c) => [c.id, c]));
+  // id 会重排，按名字兜底，保住没改角色的定妆图
+  const oldByName = new Map((current.cast ?? []).map((c) => [c.name, c]));
   const cast = rawCast && rawCast.length
-    ? doc.cast.map((c) => ({ ...c, imageAssetId: oldById.get(c.id)?.imageAssetId ?? null }))
+    ? doc.cast.map((c) => ({
+        ...c,
+        imageAssetId: (oldById.get(c.id) ?? oldByName.get(c.name))?.imageAssetId ?? null,
+      }))
     : (current.cast ?? []);
   return {
     ...current,

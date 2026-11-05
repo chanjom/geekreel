@@ -8,7 +8,7 @@ import { usePrefs } from "../lib/prefs";
 import { useAppStore } from "../lib/store";
 import { useAuth } from "../lib/auth";
 import { BrandMark } from "./brand";
-import { iconAnalyze, iconBook, iconBox, iconCanvas, iconChat, iconCpu, iconFolder, iconPalette, iconRadar, iconScissors, iconSeries, iconSettings, iconTasks, iconUsers } from "../lib/icons";
+import { iconAnalyze, iconBook, iconBox, iconCanvas, iconChat, iconCpu, iconFolder, iconPalette, iconRadar, iconScissors, iconSeries, iconSettings, iconSpark, iconTasks, iconUsers } from "../lib/icons";
 
 export function Layout() {
   const t = useT();
@@ -26,6 +26,7 @@ export function Layout() {
 
   const navItems = [
     { to: "/", label: t.nav.home, icon: iconChat },
+    { to: "/director", label: t.nav.director, icon: iconSpark },
     { to: "/drama", label: t.nav.drama, icon: iconBook },
     { to: "/series", label: t.nav.series, icon: iconSeries },
     { to: "/radar", label: t.nav.radar, icon: iconRadar },

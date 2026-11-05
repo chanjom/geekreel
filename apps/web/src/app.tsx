@@ -20,6 +20,7 @@ import { RadarPage } from "./pages/radarPage";
 import { AnalyzePage } from "./pages/analyzePage";
 import { StylesPage } from "./pages/stylesPage";
 import { DramaPage } from "./pages/dramaPage";
+import { DirectorPage } from "./pages/directorPage";
 import { SeriesPage } from "./pages/seriesPage";
 
 const queryClient = new QueryClient({
@@ -122,6 +123,7 @@ export function App() {
             >
               <Route index element={<HomePage />} />
               <Route path="/drama" element={<DramaPage />} />
+              <Route path="/director" element={<DirectorPage />} />
               <Route path="/series" element={<SeriesPage />} />
               <Route path="/radar" element={<RadarPage />} />
               <Route path="/analyze" element={<AnalyzePage />} />

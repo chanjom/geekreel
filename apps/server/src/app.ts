@@ -27,6 +27,7 @@ import { stylesRoutes } from "./routes/styles";
 import { pipelineRoutes } from "./routes/pipeline";
 import { seriesRoutes } from "./routes/series";
 import { composeRoutes } from "./routes/compose";
+import { agentRoutes } from "./routes/agent";
 
 export const { upgradeWebSocket, websocket } = createBunWebSocket();
 
@@ -59,6 +60,7 @@ export function createApp() {
   app.route("/api/pipelines", pipelineRoutes);
   app.route("/api/series", seriesRoutes);
   app.route("/api/compose", composeRoutes);
+  app.route("/api/agent", agentRoutes);
 
   app.get(
     "/ws",

@@ -205,6 +205,8 @@ export const pipelineRunHandler: JobHandler = async (job, ctx) => {
     seriesName?: string;
     kind?: "drama" | "free" | "whiteboard";
     checkpoint?: boolean;
+    /** 想拆几集。不传按 5 集（连载续写固定 1 集） */
+    episodeCount?: number;
   };
   let story = payload.story?.trim() ?? "";
   if (!story && payload.url?.trim()) {
@@ -382,6 +384,7 @@ export const pipelineRunHandler: JobHandler = async (job, ctx) => {
     kind: payload.kind ?? "drama",
     imageEndpointId: payload.imageEndpointId ?? null,
     llmEndpointId: payload.llmEndpointId ?? null,
+    episodeCount: payload.episodeCount ?? null,
   };
 
   if (payload.checkpoint !== false && !isWhiteboard) {
@@ -517,6 +520,7 @@ export async function advancePipeline(id: string): Promise<ReturnType<typeof fin
       substyle: input.substyle,
       continuing: !!(series && series.episodeCount > 0),
       episodeIndex: series ? series.episodeCount + 1 : 1,
+      episodeCount: (input as { episodeCount?: number | null }).episodeCount ?? null,
     });
     writeFileSync(join(project.directory, "pipeline/bible.json"), JSON.stringify(bible, null, 2));
   }
@@ -692,12 +696,14 @@ async function fillBibleFromCast(opts: {
   substyle: string | null;
   continuing: boolean;
   episodeIndex: number;
+  /** 想拆几集；不传按 5 集 */
+  episodeCount?: number | null;
 }): Promise<DramaBible> {
   const endpoint = resolveEndpoint("llm", opts.llmEndpointId ?? undefined);
   if (!endpoint) throw new Error("往下拆集需要文本模型");
   const adapter = getAdapter(endpoint.adapterType);
   if (!adapter?.chat) throw new Error("这个模型不会聊天");
-  const n = opts.continuing ? 1 : 5;
+  const n = opts.continuing ? 1 : Math.min(Math.max(Number(opts.episodeCount) || 5, 1), 12);
   let bible: DramaBible | null = null;
   let lastError: unknown = null;
   for (let attempt = 0; attempt < 2 && !bible; attempt++) {

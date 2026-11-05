@@ -295,6 +295,26 @@ CREATE TABLE IF NOT EXISTS auth_tokens (
 db.run("CREATE INDEX IF NOT EXISTS idx_auth_tokens_user ON auth_tokens(userId, kind)");
 db.run("CREATE INDEX IF NOT EXISTS idx_auth_tokens_exp ON auth_tokens(expiresAt)");
 
+// 导演模式：一句话 → 剧本 → 定妆 → 出片。每个阶段停下来等人确认。
+db.run(`
+CREATE TABLE IF NOT EXISTS agent_runs (
+  id TEXT PRIMARY KEY,
+  ownerId TEXT,
+  projectId TEXT,
+  pipelineId TEXT,
+  brief TEXT NOT NULL,
+  status TEXT NOT NULL,
+  stage TEXT NOT NULL,
+  planJson TEXT NOT NULL DEFAULT '{}',
+  stageJson TEXT NOT NULL DEFAULT '{}',
+  budgetCents INTEGER NOT NULL DEFAULT 0,
+  spentCents INTEGER NOT NULL DEFAULT 0,
+  note TEXT,
+  createdAt INTEGER NOT NULL,
+  updatedAt INTEGER NOT NULL
+)`);
+db.run("CREATE INDEX IF NOT EXISTS idx_agent_owner ON agent_runs(ownerId, createdAt DESC)");
+
 // 老库升级：邮箱验证状态，历史账号默认已验证
 ensureColumn("users", "emailVerified", "emailVerified INTEGER NOT NULL DEFAULT 1");
 

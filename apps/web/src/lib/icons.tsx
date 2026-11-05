@@ -96,6 +96,11 @@ export const iconChat = (p: SVGProps<SVGSVGElement>) => (
   <svg {...base(p)}><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2Z" /></svg>
 );
 
+/** 导演模式：一颗星，表示「交给它来定」 */
+export const iconSpark = (p: SVGProps<SVGSVGElement>) => (
+  <svg {...base(p)}><path d="M12 2.5l2.3 6.6 6.7.2-5.3 4.1 1.9 6.5L12 15.9l-5.6 4 1.9-6.5L3 9.3l6.7-.2Z" /></svg>
+);
+
 export const iconScissors = (p: SVGProps<SVGSVGElement>) => (
   <svg {...base(p)}><circle cx="6" cy="6" r="3" /><circle cx="6" cy="18" r="3" /><path d="M20 4 8.12 15.88M14.47 14.48 20 20M8.12 8.12 12 12" /></svg>
 );
