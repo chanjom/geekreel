@@ -6,6 +6,8 @@ import { connectWs, onWsEvent } from "./lib/store";
 import { AuthProvider, useAuth } from "./lib/auth";
 import { Layout } from "./components/layout";
 import { LoginPage } from "./pages/loginPage";
+import { ForgotPage, LegalPage, ResetPage, VerifyPage } from "./pages/authExtra";
+import { AdminPage } from "./pages/adminPage";
 import { HomePage } from "./pages/homePage";
 import { ProjectsPage } from "./pages/projectsPage";
 import { AssetsPage } from "./pages/assetsPage";
@@ -91,6 +93,14 @@ function RequireAuth({ children }: { children: ReactNode }) {
   );
 }
 
+/** 管理员守卫：普通用户手输 /admin 也只会看到提示页 */
+function RequireAdmin({ children }: { children: ReactNode }) {
+  const { user, config, loading } = useAuth();
+  if (loading) return <div className="flex h-full items-center justify-center text-sm text-fg-dim">正在加载…</div>;
+  if (config?.multiUser && user?.role !== "admin") return <Navigate to="/" replace />;
+  return <>{children}</>;
+}
+
 export function App() {
   return (
     <QueryClientProvider client={queryClient}>
@@ -98,6 +108,11 @@ export function App() {
         <BrowserRouter>
           <Routes>
             <Route path="/login" element={<LoginPage />} />
+            <Route path="/forgot" element={<ForgotPage />} />
+            <Route path="/reset" element={<ResetPage />} />
+            <Route path="/verify" element={<VerifyPage />} />
+            <Route path="/terms" element={<LegalPage kind="terms" />} />
+            <Route path="/privacy" element={<LegalPage kind="privacy" />} />
             <Route
               element={
                 <RequireAuth>
@@ -118,6 +133,7 @@ export function App() {
               <Route path="/models" element={<ModelsPage />} />
               <Route path="/jobs" element={<JobsPage />} />
               <Route path="/settings" element={<SettingsPage />} />
+              <Route path="/admin" element={<RequireAdmin><AdminPage /></RequireAdmin>} />
             </Route>
           </Routes>
         </BrowserRouter>

@@ -1,6 +1,6 @@
 {
   "name": "video-workbench",
-  "version": "0.1.2",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
   "workspaces": [
@@ -13,7 +13,7 @@
     "dev:web": "bun run --filter=@vw/web dev",
     "build": "bun run --filter=@vw/web build",
     "start": "bun run --filter=@vw/server start",
-    "typecheck": "bun run --filter=@vw/* typecheck",
+    "typecheck": "bun run --filter '@vw/*' typecheck",
     "postinstall": "bun run --filter=@vw/analyze install:bin"
   },
   "devDependencies": {

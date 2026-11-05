@@ -282,6 +282,22 @@ CREATE TABLE IF NOT EXISTS sessions (
 db.run("CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(userId)");
 db.run("CREATE INDEX IF NOT EXISTS idx_sessions_exp ON sessions(expiresAt)");
 
+// 一次性令牌：重置密码 / 验证邮箱。存哈希不存原文，泄库也换不出链接。
+db.run(`
+CREATE TABLE IF NOT EXISTS auth_tokens (
+  id TEXT PRIMARY KEY,
+  userId TEXT NOT NULL,
+  kind TEXT NOT NULL,
+  createdAt INTEGER NOT NULL,
+  expiresAt INTEGER NOT NULL,
+  usedAt INTEGER
+)`);
+db.run("CREATE INDEX IF NOT EXISTS idx_auth_tokens_user ON auth_tokens(userId, kind)");
+db.run("CREATE INDEX IF NOT EXISTS idx_auth_tokens_exp ON auth_tokens(expiresAt)");
+
+// 老库升级：邮箱验证状态，历史账号默认已验证
+ensureColumn("users", "emailVerified", "emailVerified INTEGER NOT NULL DEFAULT 1");
+
 // 归属：项目、端点、系列、分析报告各自属于一个用户
 ensureColumn("projects", "ownerId", "ownerId TEXT");
 ensureColumn("assets", "ownerId", "ownerId TEXT");

@@ -1,6 +1,18 @@
 import type { ApiResp } from "@vw/core";
 
-/** 统一 API 客户端：解包 { ok, data, error }，失败抛错 */
+/** 带业务码的接口错误：前端可按 code 分支（如 unverified / expired / exists） */
+export class ApiError extends Error {
+  readonly status: number;
+  readonly code?: string;
+  constructor(message: string, status: number, code?: string) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+    this.code = code;
+  }
+}
+
+/** 统一 API 客户端：解包 { ok, data, error }，失败抛 ApiError */
 export async function api<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(path, init);
   let json: ApiResp<T> | null = null;
@@ -12,7 +24,8 @@ export async function api<T>(path: string, init?: RequestInit): Promise<T> {
   if (!res.ok || !json || json.ok === false) {
     if (res.status === 401) window.dispatchEvent(new Event("vw:unauth"));
     const message = json && json.ok === false ? json.error : `请求失败 (${res.status})`;
-    throw new Error(message);
+    const code = json && json.ok === false ? json.code : undefined;
+    throw new ApiError(message, res.status, code);
   }
   return json.data;
 }

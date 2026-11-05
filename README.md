@@ -1,12 +1,32 @@
 # GeekReel AI Studio
 
-**本地优先的一站式 AI 视频工作台**  
+**可自托管的一站式 AI 视频工作台**
 
 热点雷达，抖音、知乎、微博等主流平台热点内容直接点击生成相关视频；分集制作、流水线一站式视频生成。
 
-不夹带任何私货，没有账号，没有云端成片库，项目、素材、密钥都在本机。
+不夹带任何私货，没有云端成片库，项目和素材都在你自己的机器上。默认打开就能用；想让一群人各用各的号，设一个环境变量就变成多人版。
 
 **[中文](#geekreel-ai-studio)** · **[English](#english)** · [设计文档 / Design](docs/design.md) · [许可 / License](LICENSE)
+
+---
+
+> ## 我是新来的，先看这个
+>
+> | 你的情况 | 点这里 |
+> |---|---|
+> | 只想在自己电脑上用 | **[docs/START-HERE.md](docs/START-HERE.md)** → 5 分钟跑起来 |
+> | 完全没接触过，要手把手 | **[docs/TUTORIAL.md](docs/TUTORIAL.md)** → 从装环境到导出第一条片子 |
+> | 想给一群人用（有网址、各用各的号） | **[docs/SELF-HOST.md](docs/SELF-HOST.md)** → 服务器部署全流程 |
+> | 想改成自己的产品 / 推自己的仓库 | **[docs/FORK.md](docs/FORK.md)** → 换名字、换 logo、断开上游 |
+>
+> 一条命令跑起来：
+>
+> ```bash
+> git clone https://github.com/chanjom/geekreel.git && cd geekreel
+> ./scripts/setup.sh          # Windows: scripts\setup.cmd
+> ```
+>
+> 浏览器打开 <http://127.0.0.1:4780>，不需要注册。
 
 ---
 
@@ -14,23 +34,29 @@
   <img src="docs/screenshots/geekreel-hero.png" alt="GeekReel AI Studio">
 </p>
 
-GeekReel AI Studio 跑在你自己的机器上。没有账号，没有云端成片库。项目、素材、密钥都在本机；生成任务走你自己配置的模型端点。
+GeekReel AI Studio 跑在你自己的机器上。没有云端成片库，项目、素材、密钥都在本机；生成任务走你自己配置的模型端点。
 
 它不是又一个在线剪辑网站，也不是绑定单一厂商的「一键出片」盒子。定位是：
 
-> 把「找选题 → 分析爆款 → 攒素材 → AI 生成 → 剪辑合成 → 导出」放进同一个本地工具。目标用户是不会剪辑、也不想写提示词的人；画布、时间线、模型中心随时可深入，但不挡在新手路上。
+> 把「找选题 → 分析爆款 → 攒素材 → AI 生成 → 剪辑合成 → 导出」放进同一个可自托管的工具。目标用户是不会剪辑、也不想写提示词的人；画布、时间线、模型中心随时可深入，但不挡在新手路上。
 
-当前版本 `0.1.2`。功能以本仓库实现为准，本版说明见 [`CHANGELOG.md`](CHANGELOG.md)，架构见 [`docs/design.md`](docs/design.md)（v0.16）。
+两种形态，一个代码库：
+
+- **单机自用**（默认）：不登录，本机即管理员，打开就能用。
+- **多人使用**（`VW_MULTI_USER=1`）：邮箱账号、数据按用户隔离、管理员后台、邀请码、找回密码。适合部署到服务器给别人用。
+
+当前版本 `0.2.0`。功能以本仓库实现为准，本版说明见 [`CHANGELOG.md`](CHANGELOG.md)，架构见 [`docs/design.md`](docs/design.md)（v0.16）。
 
 ## 为什么值得看
 
 | 亮点                | 实际做法                                                                                        |
 | ----------------- | ------------------------------------------------------------------------------------------- |
-| **本地优先**          | 无登录。SQLite 在 `~/.video-workbench`，素材在你选的文件夹（默认 `~/VideoWorkbench`）。换机器拷仓库即可跑。               |
+| **可自托管，两种形态**    | 默认无登录；设 `VW_MULTI_USER=1` 变成多账号版，数据按 `ownerId` 隔离。SQLite 在 `~/.video-workbench`，素材在你选的文件夹（默认 `~/VideoWorkbench`）。换机器拷仓库即可跑。 |
 | **模型自己配**         | 文本 / 图片 / 视频 / 语音都是「适配器 × 端点」。点一下填密钥就能加上通义、DeepSeek、GPT、可灵、豆包、MiniMax 等；也支持自定义 OpenAI 兼容地址。 |
 | **风格是目录，不是写死的皮肤** | 内置「上美影风」和「手绘白板」。第三套 = 往 `stylePacks/` 丢一个包，或贴 GitHub 技能链接 / 上传 `SKILL.md` / zip。做好的包可以带走。   |
 | **首页像对话，不是空白工程**  | 「想做什么视频？」→ 选风格 → 出剧本 → 定妆 → 出片。没做完的作品会停在任务中心，点回去接着做。                                        |
 | **配音按成片、对白对嘴**    | 字幕可以自动装上。配音要人选音色。对白先出语音再对口型，旁白只铺声；5 秒片子不会念整份 30 秒剧本。通义 / OpenAI / MiniMax / 豆包音色目录都会列出。 |
+| **账号是完整的**        | 注册（可选邀请码）、登录、忘记密码、邮箱验证、改密码、管理员后台（开号/停用/改角色/发重置链接）。配了 SMTP 自动发信，没配就由管理员发链接。       |
 | **成本看得见**         | 模型页按近 30 天汇总调用次数、tokens、张数、秒数和花费。单价填错就记 0，不猜。                                               |
 | **媒体工具随仓库走**      | ffmpeg / ffprobe 用项目依赖；yt-dlp 按当前系统下载独立二进制。不要去装 pipx，也不要依赖开发机 PATH。                         |
 
@@ -185,42 +211,51 @@ GeekReel AI Studio 跑在你自己的机器上。没有账号，没有云端成�
 
 ## 快速开始
 
-完整的环境要求、坑位排查、换机器与备份步骤见 [docs/DEPLOY.md](docs/DEPLOY.md)。
-
 **环境**：已安装 [Bun](https://bun.sh)（1.2+）。macOS / Windows / Linux 可跑。`bun install` 会按当前系统补 yt-dlp；ffmpeg 用项目依赖。不要依赖 Homebrew / pipx / scoop 包装脚本。
 
-macOS / Linux：
-
 ```bash
 git clone https://github.com/chanjom/geekreel.git
 cd geekreel
-./scripts/dev.sh
+./scripts/setup.sh          # 装依赖 + 编网页 + 启动，一条命令
 ```
 
-Windows（cmd 或 PowerShell）：
+Windows：`scripts\setup.cmd`。
 
-```bat
-git clone https://github.com/chanjom/geekreel.git
-cd geekreel
-scripts\dev.cmd
-```
+第一次 1–3 分钟，之后用 `./scripts/start.sh`（Windows `scripts\start.cmd`）几秒启动。
 
-也可以 `bun install` 之后直接 `bun run dev`。
-
-- 网页：[http://127.0.0.1:5473](http://127.0.0.1:5473)
-- API / WebSocket：[http://127.0.0.1:4780](http://127.0.0.1:4780)（开发态由 Vite 代理 `/api` 与 `/ws`）
-
-只跑成品（先编网页，再由服务托管静态资源）：
-
-```bash
-./scripts/start.sh
-```
-
-Windows：`scripts\start.cmd`。
-
-浏览器打开 [http://127.0.0.1:4780](http://127.0.0.1:4780)。
+浏览器打开 [http://127.0.0.1:4780](http://127.0.0.1:4780)。单机模式不需要注册。
 
 第一次打开：到 **模型** 页加上文本、图片、视频（配音可选）端点，再回首页写想法。没有密钥时界面会引导去配置，而不是甩一堆报错栈。
+
+**给一群人用**（要账号、要登录、各看各的数据）：
+
+```bash
+./scripts/setup.sh multi    # 自动生成 .env：开放注册 + 邀请码 + 监听所有网卡
+```
+
+或手工：`cp .env.example .env`，把 `VW_MULTI_USER` 改成 `1`。完整部署（域名、HTTPS、发信、备份）见 [docs/SELF-HOST.md](docs/SELF-HOST.md)。
+
+**开发态**（热更新，改代码立刻生效）：
+
+```bash
+./scripts/dev.sh            # Windows: scripts\dev.cmd
+```
+
+- 网页：<http://localhost:5473>（Vite 只监听 IPv6，用 `localhost` 而不是 `127.0.0.1`）
+- API / WebSocket：<http://127.0.0.1:4780>
+
+### 账号体系（多人模式）
+
+| 能力 | 说明 |
+|---|---|
+| 注册 | 可开关。第一个账号自动成为管理员；可要求邀请码 |
+| 登录 | 邮箱 + 密码，argon2 哈希，HttpOnly cookie，按 IP 限流 |
+| 忘记密码 | 配了 SMTP 自动发信；没配就由管理员在「账号管理」生成一次性链接 |
+| 邮箱验证 | 可选（`VW_REQUIRE_EMAIL_VERIFY=1`），开启后注册必须点邮件里的链接 |
+| 管理员后台 | `/admin`：账号列表、开号、停用/启用、改角色、发重置链接、30 天用量 |
+| 数据隔离 | 项目 / 素材 / 任务 / 模型端点 / 连载 / 分析报告都按 `ownerId` 过滤，越权统一 404 |
+
+服务条款与隐私说明在 `/terms`、`/privacy`，管理员可按实际情况改写。
 
 ### 目录
 
@@ -283,7 +318,20 @@ Bun + Hono
 3. **部分平台视频下载会失败**（尤其是抖音）。分析页写明了：先存到本地，再导入资产库。
 4. **配音不会在出片时自动铺上。** 这是有意的：先看画面和字幕，再选声音。对白镜点配音后会再对嘴。
 5. **风格包改变的是提示词与流水线，不是保证每一帧都像样片。** 观感仍取决于你选的图 / 视频模型。
-6. **默认只监听本机。** 若改 `VW_HOST` 对外网开放，请自行处理访问控制；密钥在本机库里。
+6. **默认只监听本机。** 改 `VW_HOST=0.0.0.0` 对外开放时，**一定同时开 `VW_MULTI_USER=1`**，否则任何能访问这个端口的人都能直接用你的模型 key。部署步骤见 [docs/SELF-HOST.md](docs/SELF-HOST.md)。
+7. **多人版不自带代付与计费。** 费用发生在每个用户自己的模型厂商账户里；平台的「30 天花费」是按用户填的单价估算，不是账单。
+
+## 文档
+
+| 文件 | 讲什么 |
+|---|---|
+| [docs/START-HERE.md](docs/START-HERE.md) | 三种人三条路：自己用 / 给别人用 / 变成自己的 |
+| [docs/TUTORIAL.md](docs/TUTORIAL.md) | 零基础教程：装环境 → 配 key → 出第一条片子 → 导出 |
+| [docs/SELF-HOST.md](docs/SELF-HOST.md) | 服务器部署：域名、HTTPS、发信、备份、合规 |
+| [docs/FORK.md](docs/FORK.md) | 改品牌、推自己的仓库、打自己的镜像 |
+| [docs/WORKFLOW.md](docs/WORKFLOW.md) | 内部链路、模块地图、模型适配的坑、渲染管线 |
+| [docs/DEPLOY.md](docs/DEPLOY.md) | 单机部署与排错 |
+| [.env.example](.env.example) | 所有配置项，每项有注释 |
 
 ## 开发
 

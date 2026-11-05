@@ -9,11 +9,22 @@ export interface AuthUser {
 }
 
 export interface AuthConfig {
+  siteName: string;
+  version: string;
   multiUser: boolean;
   allowRegister: boolean;
   needsFirstAdmin: boolean;
   requireCode: boolean;
   sessionDays: number;
+  /** 注册后是否必须去邮箱点验证链接（只有配好 SMTP 才会为 true） */
+  requireVerify: boolean;
+  /** 站里配了发信服务没有。没配时忘记密码要走管理员手动发链接 */
+  mailConfigured: boolean;
+}
+
+export interface RegisterResult {
+  needVerify: boolean;
+  message?: string;
 }
 
 interface AuthState {
@@ -21,8 +32,19 @@ interface AuthState {
   config: AuthConfig | null;
   loading: boolean;
   login(email: string, password: string): Promise<void>;
-  register(input: { email: string; password: string; name?: string; code?: string }): Promise<void>;
+  register(input: {
+    email: string;
+    password: string;
+    name?: string;
+    code?: string;
+    acceptTerms: boolean;
+  }): Promise<RegisterResult>;
   logout(): Promise<void>;
+  forgot(email: string): Promise<{ via: "smtp" | "outbox"; note?: string }>;
+  resetPassword(token: string, password: string): Promise<void>;
+  verifyEmail(token: string): Promise<void>;
+  resendVerify(): Promise<void>;
+  updateName(name: string): Promise<void>;
   refresh(): Promise<void>;
 }
 
@@ -41,6 +63,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       ]);
       setUser(me.user);
       setConfig(cfg);
+      if (cfg.siteName) document.title = `${cfg.siteName} · AI 视频工作台`;
     } catch {
       setUser(null);
     } finally {
@@ -72,8 +95,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setUser(r.user);
       },
       async register(input) {
-        const r = await apiJson<{ user: AuthUser }>("/api/auth/register", "post", input);
-        setUser(r.user);
+        const r = await apiJson<{ user: AuthUser | null; needVerify?: boolean; message?: string }>(
+          "/api/auth/register",
+          "post",
+          input,
+        );
+        if (r.user) setUser(r.user);
+        return { needVerify: Boolean(r.needVerify), message: r.message };
       },
       async logout() {
         try {
@@ -81,6 +109,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         } finally {
           setUser(null);
         }
+      },
+      async forgot(email) {
+        const r = await apiJson<{ ok: true; via: "smtp" | "outbox"; note?: string }>("/api/auth/forgot", "post", {
+          email,
+        });
+        return { via: r.via, note: r.note };
+      },
+      async resetPassword(token, password) {
+        await apiJson("/api/auth/reset", "post", { token, password });
+      },
+      async verifyEmail(token) {
+        await apiJson("/api/auth/verify", "post", { token });
+      },
+      async resendVerify() {
+        await apiJson("/api/auth/verify/send", "post");
+      },
+      async updateName(name) {
+        const r = await apiJson<{ user: AuthUser }>("/api/auth/profile", "post", { name });
+        setUser(r.user);
       },
     }),
     [user, config, loading],

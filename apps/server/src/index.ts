@@ -19,8 +19,9 @@ import { listPacks } from "./services/styles";
 import { styleImportHandler } from "./services/styleImport";
 import { libraryRoot } from "./services/library";
 import { detectYtdlp } from "@vw/analyze";
-import { adoptOrphans, ensureLocalAdmin, purgeExpiredSessions } from "./lib/auth";
-import { multiUser } from "./config";
+import { adoptOrphans, ensureLocalAdmin, hasAnyRealUser, purgeExpiredSessions, purgeExpiredTokens } from "./lib/auth";
+import { allowRegister, multiUser, registerCode, smtp } from "./config";
+import { mailConfigured } from "./lib/mail";
 
 // 单机模式：建一个本机管理员，并把历史数据收归名下，行为与旧版完全一致。
 // 多人模式：等第一个注册者成为管理员后再接管；此处只清理过期会话。
@@ -30,6 +31,7 @@ if (!multiUser) {
   if (moved > 0) console.log(`[vw] 已有 ${moved} 条历史数据归入本机管理员`);
 }
 purgeExpiredSessions();
+purgeExpiredTokens();
 
 // 注册任务处理器
 jobQueue.register("asset.index", indexAssetHandler, 2);
@@ -74,3 +76,18 @@ const ytdlp = detectYtdlp();
 console.log(`[vw] yt-dlp: ${ytdlp.bin ? `${ytdlp.bin} (${ytdlp.source})` : "未打包（竞品分析已改为读文案，不再依赖下载）"}`);
 const packs = listPacks();
 console.log(`[vw] 风格包: ${packs.map((p) => `${p.name}${p.ready ? "" : "(未开放)"}`).join("、") || "无"}`);
+
+// 部署自检：这几行是给运维看的，出问题时先看这里
+if (multiUser) {
+  const first = !hasAnyRealUser();
+  console.log(`[vw] 多人模式：已开启。注册 ${allowRegister || first ? "开放" : "关闭"}${registerCode ? "（需邀请码）" : ""}`);
+  console.log(
+    `[vw] 发信：${mailConfigured() ? `SMTP ${smtp.host}:${smtp.port}` : "未配置 —— 忘记密码只能由管理员在「账号管理」里发链接"}`,
+  );
+  if (first) console.log("[vw] 还没有账号：浏览器打开首页，第一个注册的人会成为管理员");
+} else {
+  console.log("[vw] 单机模式：不需要登录。要给别人用，设 VW_MULTI_USER=1 后重启（见 docs/SELF-HOST.md）");
+}
+if (host === "0.0.0.0" && !multiUser) {
+  console.log("[vw] 注意：已监听所有网卡但没有开多人模式，任何能访问这个端口的人都能直接用你的模型 key");
+}

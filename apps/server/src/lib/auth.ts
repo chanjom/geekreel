@@ -153,6 +153,56 @@ export function hasAnyRealUser(): boolean {
 }
 
 // ---------------------------------------------------------------------------
+// 一次性令牌：重置密码 / 验证邮箱
+// ---------------------------------------------------------------------------
+
+export type TokenKind = "reset" | "verify";
+
+function sha256(s: string): string {
+  return new Bun.CryptoHasher("sha256").update(s).digest("hex");
+}
+
+/** 发一个新令牌，返回原文（只在这一个时刻能看到）。旧令牌自动作废。 */
+export function createAuthToken(userId: string, kind: TokenKind, ttlMs: number): string {
+  const raw = randomToken();
+  const now = Date.now();
+  db.run("UPDATE auth_tokens SET usedAt = ? WHERE userId = ? AND kind = ? AND usedAt IS NULL", [now, userId, kind]);
+  db.run("INSERT INTO auth_tokens (id, userId, kind, createdAt, expiresAt) VALUES (?, ?, ?, ?, ?)", [
+    sha256(raw),
+    userId,
+    kind,
+    now,
+    now + ttlMs,
+  ]);
+  return raw;
+}
+
+/** 校验并消费令牌。返回 userId；无效/过期/用过都返回 null。 */
+export function consumeAuthToken(raw: string, kind: TokenKind): string | null {
+  if (!raw) return null;
+  const id = sha256(raw);
+  const row = db
+    .query("SELECT userId, expiresAt, usedAt FROM auth_tokens WHERE id = ? AND kind = ?")
+    .get(id, kind) as { userId: string; expiresAt: number; usedAt: number | null } | null;
+  if (!row || row.usedAt || row.expiresAt < Date.now()) return null;
+  db.run("UPDATE auth_tokens SET usedAt = ? WHERE id = ?", [Date.now(), id]);
+  return row.userId;
+}
+
+/** 只查不消费：页面加载时判断链接还能不能用 */
+export function peekAuthToken(raw: string, kind: TokenKind): boolean {
+  if (!raw) return false;
+  const row = db
+    .query("SELECT expiresAt, usedAt FROM auth_tokens WHERE id = ? AND kind = ?")
+    .get(sha256(raw), kind) as { expiresAt: number; usedAt: number | null } | null;
+  return Boolean(row && !row.usedAt && row.expiresAt >= Date.now());
+}
+
+export function purgeExpiredTokens(): void {
+  db.run("DELETE FROM auth_tokens WHERE expiresAt < ?", [Date.now() - 24 * 60 * 60 * 1000]);
+}
+
+// ---------------------------------------------------------------------------
 // 中间件
 // ---------------------------------------------------------------------------
 

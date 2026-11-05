@@ -5,8 +5,8 @@ export function ok<T>(c: Context, data: T) {
   return c.json<ApiResp<T>>({ ok: true, data });
 }
 
-export function err(c: Context, message: string, status = 400) {
-  return c.json<ApiResp<never>>({ ok: false, error: message }, status as never);
+export function err(c: Context, message: string, status = 400, code?: string) {
+  return c.json<ApiResp<never>>({ ok: false, error: message, ...(code ? { code } : {}) }, status as never);
 }
 
 export function now(): number {

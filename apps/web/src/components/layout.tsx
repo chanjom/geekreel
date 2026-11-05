@@ -8,10 +8,11 @@ import { usePrefs } from "../lib/prefs";
 import { useAppStore } from "../lib/store";
 import { useAuth } from "../lib/auth";
 import { BrandMark } from "./brand";
-import { iconAnalyze, iconBook, iconBox, iconCanvas, iconChat, iconCpu, iconFolder, iconPalette, iconRadar, iconScissors, iconSeries, iconSettings, iconTasks } from "../lib/icons";
+import { iconAnalyze, iconBook, iconBox, iconCanvas, iconChat, iconCpu, iconFolder, iconPalette, iconRadar, iconScissors, iconSeries, iconSettings, iconTasks, iconUsers } from "../lib/icons";
 
 export function Layout() {
   const t = useT();
+  const { user } = useAuth();
   const compact = usePrefs((s) => s.compactNav);
   const wsConnected = useAppStore((s) => s.wsConnected);
   const liveJobs = useAppStore((s) => s.liveJobs);
@@ -37,6 +38,8 @@ export function Layout() {
     { to: "/models", label: t.nav.models, icon: iconCpu },
     { to: "/jobs", label: t.nav.jobs, icon: iconTasks },
     { to: "/settings", label: t.nav.settings, icon: iconSettings },
+    // 只有管理员看得到账号管理；普通用户连入口都不显示
+    ...(user?.role === "admin" ? [{ to: "/admin", label: t.nav.admin, icon: iconUsers }] : []),
   ];
 
   return (

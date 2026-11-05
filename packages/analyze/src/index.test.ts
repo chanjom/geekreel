@@ -20,7 +20,7 @@ test("looksLikeVideoUrl", () => {
 test("detectYtdlp 用项目自带二进制", () => {
   const hit = detectYtdlp(true);
   expect(hit.source).toBe("bundled");
-  expect(hit.bin.replace(/\\/g, "/")).toContain("packages/analyze/vendor/yt-dlp");
+  expect((hit.bin ?? "").replace(/\\/g, "/")).toContain("packages/analyze/vendor/yt-dlp");
 });
 
 test("fallbackTemplate 按时长拆 3–5 镜", () => {
