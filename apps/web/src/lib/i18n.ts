@@ -1,8 +1,6 @@
 import { usePrefs, type LocaleId } from "./prefs";
 
 const zh = {
-  brand: "GeekReel AI Studio",
-  brandEn: "GeekReel AI Studio",
   nav: {
     home: "首页",
     drama: "小说转短剧",
@@ -71,8 +69,6 @@ const zh = {
 };
 
 const en: typeof zh = {
-  brand: "GeekReel AI Studio",
-  brandEn: "GeekReel AI Studio",
   nav: {
     home: "Home",
     drama: "Novel to drama",
