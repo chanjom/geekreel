@@ -101,7 +101,9 @@ export function shotLanguageLine(shot?: Pick<DramaShot, "shotSize" | "cameraMove
  * 拿它直接喂图生视频，模型只会让画面轻轻呼吸，五秒下来人物没挪窝 ——
  * 这就是「PPT 感」。静态描述和运动指令是两件事，不能共用一段文本。
  */
-export function videoMotionLine(shot?: Pick<DramaShot, "shotSize" | "cameraMove" | "angle" | "visual" | "line"> | null): string {
+export function videoMotionLine(
+  shot?: Partial<Pick<DramaShot, "shotSize" | "cameraMove" | "angle" | "visual" | "line">> | null,
+): string {
   const move = shot?.cameraMove ?? "push";
   const fixed = move === "static";
   const camera = fixed
