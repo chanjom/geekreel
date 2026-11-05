@@ -41,7 +41,7 @@ loadDotEnv();
 
 export const repoDir = repoRoot;
 
-export const version = "0.2.0";
+export const version = "0.3.0";
 export const port = Number(process.env.VW_PORT ?? 4780);
 export const host = process.env.VW_HOST ?? "127.0.0.1";
 
