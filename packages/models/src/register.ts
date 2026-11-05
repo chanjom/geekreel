@@ -3,8 +3,10 @@ import { registerAdapter } from "./index";
 import { comfyui } from "./comfyui";
 import { doubaoSeedance, kling } from "./video";
 import { windowsTts } from "./windowsTts";
+import { doubaoTts } from "./doubaoTts";
 
 registerAdapter(kling);
 registerAdapter(doubaoSeedance);
 registerAdapter(comfyui);
 registerAdapter(windowsTts);
+registerAdapter(doubaoTts);

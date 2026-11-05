@@ -272,10 +272,10 @@ export const modelPresets: ModelPreset[] = [
   {
     id: "doubao-tts",
     name: "豆包配音",
-    hint: "到 ark.volcengine.com 复制 API Key。模型名按控制台接入点改。",
+    hint: "到 console.volcengine.com/speech/app → 应用管理 → 服务接口认证信息，复制 APP ID 和 Access Token（不是方舟的 ark- key）。",
     capability: "tts",
-    adapterType: "openai-compatible",
-    config: { baseUrl: "https://ark.cn-beijing.volces.com/api/v3", model: "doubao-tts" },
+    adapterType: "doubao-tts",
+    config: { cluster: "volcano_tts", voiceType: "zh_female_vv_uranus_bigtts", speedRatio: "1" },
     secretKeys: ["apiKey"],
   },
   {
