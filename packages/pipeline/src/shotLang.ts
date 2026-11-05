@@ -51,9 +51,12 @@ export function inferCameraMove(text: string): CameraMove {
   if (/拉远|拉开|退后/.test(text)) return "pull";
   if (/横摇|摇过|横扫/.test(text)) return "pan";
   if (/俯仰|抬头|低头/.test(text)) return "tilt";
-  if (/跟随|追上|跟上|追着/.test(text)) return "follow";
-  if (/环绕|绕着/.test(text)) return "orbit";
-  return "static";
+  if (/跟随|追上|跟上|追着|追出去/.test(text)) return "follow";
+  if (/环绕|绕着|转一圈/.test(text)) return "orbit";
+  if (/固定|静止|定格|不动|空镜/.test(text)) return "static";
+  // 没线索时别再默认固定。固定机位图生视频出来就是「会呼吸的静止图」，
+  // 一集三镜全是它，观感就是 PPT。默认给一个缓慢推进，画面至少有层次变化。
+  return "push";
 }
 
 export function inferCameraAngle(text: string): CameraAngle {
@@ -86,7 +89,33 @@ export function fillShotLanguage(shot: DramaShot): DramaShot {
 export function shotLanguageLine(shot?: Pick<DramaShot, "shotSize" | "cameraMove" | "angle"> | null): string {
   if (!shot?.shotSize && !shot?.cameraMove && !shot?.angle) return "";
   const size = shot.shotSize ? shotSizeLabels[shot.shotSize] : "中景";
-  const move = shot.cameraMove ? cameraMoveLabels[shot.cameraMove] : "固定";
+  const move = shot.cameraMove ? cameraMoveLabels[shot.cameraMove] : "推进";
   const angle = shot.angle ? cameraAngleLabels[shot.angle] : "平视";
   return `镜头语言：${size}，${move}，${angle}。按这个景别和运镜拍，不要自己改成别的。`;
+}
+
+/**
+ * 视频提示词里必须单独写「要动起来」。
+ *
+ * 分镜的 imagePrompt 是给画图用的静态描述（「谁+在哪+做什么」，40 字内），
+ * 拿它直接喂图生视频，模型只会让画面轻轻呼吸，五秒下来人物没挪窝 ——
+ * 这就是「PPT 感」。静态描述和运动指令是两件事，不能共用一段文本。
+ */
+export function videoMotionLine(shot?: Pick<DramaShot, "shotSize" | "cameraMove" | "angle" | "visual" | "line"> | null): string {
+  const move = shot?.cameraMove ?? "push";
+  const fixed = move === "static";
+  const camera = fixed
+    ? "机位固定不动，但画面里的人必须真的在做事（走、转身、抬手、放东西、回头），不要只有呼吸和眨眼。"
+    : `机位${cameraMoveLabels[move]}，全程持续，不要推到一半停住，也不要忽快忽慢。`;
+  const talk = shot?.line?.trim()
+    ? "说话时要看得到开口、闭口、换气的连贯过程，嘴型跟着这句话走，不要抿着嘴念台词。"
+    : "";
+  return [
+    "这是视频，不是图片：人物和身体要有看得懂的连续动作，不许几乎静止。",
+    camera,
+    "一个镜头里完成一个完整动作：起势、过程、收势都要占时间，不要一秒就摆好姿势等结束。",
+    talk,
+  ]
+    .filter(Boolean)
+    .join("\n");
 }

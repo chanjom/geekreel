@@ -26,6 +26,7 @@ import {
   qaReviewPrompt,
   shouldRetryQa,
   shotDurationSec,
+  videoMotionLine,
 } from "@vw/pipeline";
 import { db } from "../db";
 import type { JobHandler } from "../jobs/queue";
@@ -130,6 +131,9 @@ export const renderEpisodeHandler: JobHandler = async (job, ctx) => {
       dialogue: shot.line || null,
       shot,
     });
+    // 画首帧和出视频要两种提示词。前者描述「长什么样」，后者必须描述「怎么动」；
+    // 只给静态描述，图生视频出来就是一串会呼吸的静帧。
+    const videoPrompt = `${prompt}\n${videoMotionLine(shot)}`;
     const refIds = pickShotRefImages(bible, shot.entityIds, lastFrameId ? [lastFrameId] : []);
     // 这一镜画面/台词里点到谁，就以谁为准；都不提才退回第一个出场角色。
     const lead = leadCharacterForShot(bible, shot);
@@ -264,7 +268,7 @@ export const renderEpisodeHandler: JobHandler = async (job, ctx) => {
 
     if (videoAd?.generateVideo && videoEp) {
       try {
-        await makeVideo(prompt);
+        await makeVideo(videoPrompt);
       } catch (e) {
         // 别把原因吞掉。画面退回静帧时，得让人知道是模型报错还是额度用完。
         videoError = e instanceof Error ? e.message : String(e);
@@ -278,7 +282,7 @@ export const renderEpisodeHandler: JobHandler = async (job, ctx) => {
       if (shouldRetryQa(qa)) {
         try {
           ctx.progress(0.08 + ((i + 0.4) / ep.shots.length) * 0.8, `第 ${i + 1} 镜质检没过，重做`);
-          const retryPrompt = `${prompt}\n上一镜漂了：${qa.note}。必须和定妆同一张脸、同一套衣服，禁止换人换景。`;
+          const retryPrompt = `${videoPrompt}\n上一镜漂了：${qa.note}。必须和定妆同一张脸、同一套衣服，禁止换人换景。`;
           if (videoAd?.generateVideo && videoEp) {
             await makeVideo(retryPrompt);
           } else if (imageAd?.generateImage && imageEp) {

@@ -263,6 +263,11 @@ export const doubaoSeedance: ModelAdapter = {
     const headers = { "Content-Type": "application/json", Authorization: `Bearer ${config.apiKey ?? ""}` };
     const base = config.baseUrl || "https://ark.cn-beijing.volces.com/api/v3";
     const imgs = collectVideoImagesWithRoles(req);
+    const modelName = String(config.model || "");
+    // Seedance 2.0 起才支持「生成同步音频」和 4~15 秒任意时长；1.0 系列发这些参数会直接报错。
+    const isV2 = /seedance-2/i.test(modelName);
+    const wantAudio = isV2 && Boolean(req.audio) && String(config.generateAudio ?? "true") !== "false";
+    const dur = isV2 ? Math.min(15, Math.max(4, Math.round(req.durationSec || 5))) : req.durationSec || 5;
     const body = (mode: "roles" | "first") => {
       const picked = mode === "roles" ? imgs : imgs.slice(0, 1).map((x) => ({ image: x.image }));
       return JSON.stringify({
@@ -275,7 +280,8 @@ export const doubaoSeedance: ModelAdapter = {
             ...(role ? { role } : {}),
           })),
         ],
-        duration: req.durationSec || 5,
+        duration: dur,
+        ...(wantAudio ? { generate_audio: true } : {}),
         ...(config.ratio ? { ratio: config.ratio } : {}),
         ...(config.resolution ? { resolution: config.resolution } : {}),
         watermark: false,
