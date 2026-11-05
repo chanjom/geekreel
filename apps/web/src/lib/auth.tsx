@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { api, apiJson } from "./api";
+import { setSiteBrand } from "./site";
 
 export interface AuthUser {
   id: string;
@@ -10,6 +11,7 @@ export interface AuthUser {
 
 export interface AuthConfig {
   siteName: string;
+  siteTagline: string;
   version: string;
   multiUser: boolean;
   allowRegister: boolean;
@@ -63,7 +65,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       ]);
       setUser(me.user);
       setConfig(cfg);
-      if (cfg.siteName) document.title = `${cfg.siteName} · AI 视频工作台`;
+      setSiteBrand({ name: cfg.siteName, tagline: cfg.siteTagline });
     } catch {
       setUser(null);
     } finally {

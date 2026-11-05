@@ -63,8 +63,11 @@ export const sessionDays = Math.max(1, Number(process.env.VW_SESSION_DAYS ?? 30)
 /** 是否只允许 https cookie（挂在反代后面时设 1） */
 export const secureCookie = process.env.VW_SECURE_COOKIE === "1";
 
-/** 站点名：出现在登录页、邮件标题、页面 title。改成自己的品牌名即可 */
+/** 站点名：出现在登录页、侧栏、邮件标题、页面 title。改成自己的品牌名即可 */
 export const siteName = (process.env.VW_SITE_NAME ?? "GeekReel").trim() || "GeekReel";
+
+/** 副标题：品牌名下面那行小字。不需要就设成空字符串 */
+export const siteTagline = (process.env.VW_SITE_TAGLINE ?? "AI Studio").trim();
 
 /** 对外地址（https://your.domain）。用于拼邮件里的重置链接；不设则按请求头推断 */
 export const publicUrl = (process.env.VW_PUBLIC_URL ?? "").trim().replace(/\/+$/, "");

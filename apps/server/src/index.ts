@@ -1,7 +1,7 @@
 import "@vw/models/register";
 import { detectBins } from "@vw/media";
 import { createApp, websocket } from "./app";
-import { host, port } from "./config";
+import { host, port, siteName, siteTagline, version } from "./config";
 import { jobQueue } from "./jobs/queue";
 import { indexAssetHandler } from "./services/indexer";
 import { genImageHandler, genTtsHandler, genVideoHandler, mediaTranscodeHandler, timelineTtsHandler } from "./services/generate";
@@ -70,6 +70,7 @@ Bun.serve({
 });
 
 console.log(`[vw] 视频工作台 server 已启动: http://${host}:${port}`);
+console.log(`[vw] 站点: ${siteName}${siteTagline ? ` · ${siteTagline}` : ""}（v${version}）`);
 console.log(`[vw] 资产库根目录: ${libraryRoot()}`);
 console.log(`[vw] ffmpeg: ${bins.available ? `${bins.ffmpeg} (${bins.source})` : "未检测到 —— 缩略图/代理不可用，安装后重启生效"}`);
 const ytdlp = detectYtdlp();

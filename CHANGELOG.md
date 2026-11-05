@@ -23,6 +23,13 @@
 - **启动自检**：启动时打印多人模式、注册策略、发信状态、首个管理员提示；监听 `0.0.0.0` 但没开多人模式会明确警告。
 - **文档**：`docs/START-HERE.md`（三种人三条路）、`docs/TUTORIAL.md`（零基础实操）、`docs/SELF-HOST.md`（服务器部署全流程 + 合规）、`docs/FORK.md`（换品牌、推自己的仓库、打镜像）。`.env.example` 每项都有注释。
 
+### 改成你自己的
+
+- **`scripts/rebrand.sh` / `rebrand.cmd`**：一条命令改产品名、副标题、主题色、logo、包名。主题色会自动算出深/浅/护眼三套主题的 accent 与 accent-dim；`--reset-git` 直接断开与原仓库的关系。
+- **品牌不再是硬编码**：站点名与副标题由 `/api/auth/config` 下发，侧栏、登录页、浏览器标题、邮件标题共用一处配置。改 `.env` 里的 `VW_SITE_NAME` / `VW_SITE_TAGLINE` 重启即可，不用重编前端。
+- 新增 `VW_SITE_TAGLINE`（品牌名下面那行小字，留空则不显示）；`apps/web/src/lib/site.ts` 存构建期默认值，兜底接口未返回时显示。
+- `docs/FORK.md` 重写：三种目标分流、换牌参数表、改了不生效的六步排查、断上游、打镜像、许可证。
+
 ### 其他
 
 - 版本号 `0.1.2` → `0.2.0`；`VW_SITE_NAME` 可改站点名，`VW_LIBRARY_ROOT` 可指定资产库根目录。

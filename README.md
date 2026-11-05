@@ -17,7 +17,7 @@
 > | 只想在自己电脑上用 | **[docs/START-HERE.md](docs/START-HERE.md)** → 5 分钟跑起来 |
 > | 完全没接触过，要手把手 | **[docs/TUTORIAL.md](docs/TUTORIAL.md)** → 从装环境到导出第一条片子 |
 > | 想给一群人用（有网址、各用各的号） | **[docs/SELF-HOST.md](docs/SELF-HOST.md)** → 服务器部署全流程 |
-> | 想改成自己的产品 / 推自己的仓库 | **[docs/FORK.md](docs/FORK.md)** → 换名字、换 logo、断开上游 |
+> | 想改成自己的产品 / 推自己的仓库 | **[docs/FORK.md](docs/FORK.md)** → `scripts/rebrand.sh` 一条命令换名字、颜色、logo，再断开上游 |
 >
 > 一条命令跑起来：
 >
@@ -336,7 +336,7 @@ Bun + Hono
 | [docs/START-HERE.md](docs/START-HERE.md) | 三种人三条路：自己用 / 给别人用 / 变成自己的 |
 | [docs/TUTORIAL.md](docs/TUTORIAL.md) | 零基础教程：装环境 → 配 key → 出第一条片子 → 导出 |
 | [docs/SELF-HOST.md](docs/SELF-HOST.md) | 服务器部署：域名、HTTPS、发信、备份、合规 |
-| [docs/FORK.md](docs/FORK.md) | 改品牌、推自己的仓库、打自己的镜像 |
+| [docs/FORK.md](docs/FORK.md) | 改成你自己的：换名字/颜色/logo、断开上游、打自己的镜像、许可证 |
 | [docs/WORKFLOW.md](docs/WORKFLOW.md) | 内部链路、模块地图、模型适配的坑、渲染管线 |
 | [docs/DEPLOY.md](docs/DEPLOY.md) | 单机部署与排错 |
 | [.env.example](.env.example) | 所有配置项，每项有注释 |

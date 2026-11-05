@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { getCookie } from "hono/cookie";
 import { db } from "../db";
-import { allowRegister, multiUser, publicUrl, registerCode, requireVerify, sessionDays, siteName, version } from "../config";
+import { allowRegister, multiUser, publicUrl, registerCode, requireVerify, sessionDays, siteName, siteTagline, version } from "../config";
 import { err, ok } from "../lib/resp";
 import {
   SESSION_COOKIE,
@@ -107,6 +107,7 @@ authRoutes.get("/config", (c) => {
   const mail = mailConfigured();
   return ok(c, {
     siteName,
+    siteTagline,
     version,
     multiUser,
     allowRegister: allowRegister || !anyUser,

@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { siteTitle } from "./site";
 
 export type ThemeId = "dark" | "light" | "eye";
 export type LocaleId = "zh" | "en";
@@ -52,7 +53,7 @@ export function applyPrefs(prefs: AppPrefs) {
   root.dataset.compact = prefs.compactNav ? "1" : "0";
   root.dataset.reduceMotion = prefs.reduceMotion ? "1" : "0";
   root.lang = prefs.locale === "en" ? "en" : "zh-CN";
-  document.title = "GeekReel AI Studio";
+  document.title = siteTitle();
 }
 
 type PrefsStore = AppPrefs & {
