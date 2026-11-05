@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { pushChannelLabels, type PushChannelType } from "@vw/core";
 import { pushFieldSpecs } from "@vw/push";
 import { err, ok } from "../lib/resp";
+import { requireAdmin } from "../lib/auth";
 import {
   createChannel,
   deleteChannel,
@@ -13,6 +14,9 @@ import {
 } from "../services/push";
 
 export const pushRoutes = new Hono();
+
+// 热点源、推送通道是全局配置，只有管理员能碰
+pushRoutes.use("/*", requireAdmin);
 
 pushRoutes.get("/types", (c) =>
   ok(

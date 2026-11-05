@@ -6,6 +6,7 @@ import { isAbsolutePath, isForbiddenProjectDir } from "../lib/paths";
 import { sanitizeTitle, type Project, type ScriptDoc, type SeriesKind } from "@vw/core";
 import { db } from "../db";
 import { err, newId, now, ok } from "../lib/resp";
+import { actor, ownsProject, ownsSeries } from "../lib/auth";
 import { libraryRoot } from "../services/library";
 import { attachEpisode, createSeries, ensureProjectSeries, getSeries } from "../services/series";
 import { loadProjectScript, saveProjectScript } from "../services/scriptStore";
@@ -14,21 +15,27 @@ function rowToProject(row: Record<string, unknown>): Project {
   return row as unknown as Project;
 }
 
+/** 项目不存在 / 不属于当前用户，都返回 404，不暴露他人项目是否存在 */
+function mine(c: { get: (k: "user") => { id: string } }, projectId: string | undefined): boolean {
+  return ownsProject(c.get("user").id, projectId);
+}
+
 export const projectsRoutes = new Hono();
 
 projectsRoutes.get("/", (c) => {
+  const me = actor(c).id;
   const sort = c.req.query("sort") === "created" ? "createdAt" : "updatedAt";
   const pageRaw = c.req.query("page");
   if (!pageRaw && !c.req.query("pageSize")) {
-    const rows = db.query(`SELECT * FROM projects ORDER BY ${sort} DESC`).all() as Record<string, unknown>[];
+    const rows = db.query(`SELECT * FROM projects WHERE ownerId = ? ORDER BY ${sort} DESC`).all(me) as Record<string, unknown>[];
     return ok(c, rows.map(rowToProject));
   }
   const page = Math.max(Number(pageRaw ?? 1) || 1, 1);
   const pageSize = Math.min(Math.max(Number(c.req.query("pageSize") ?? 12) || 12, 1), 50);
-  const total = (db.query("SELECT COUNT(*) AS n FROM projects").get() as { n: number }).n;
+  const total = (db.query("SELECT COUNT(*) AS n FROM projects WHERE ownerId = ?").get(me) as { n: number }).n;
   const rows = db
-    .query(`SELECT * FROM projects ORDER BY ${sort} DESC LIMIT ? OFFSET ?`)
-    .all(pageSize, (page - 1) * pageSize) as Record<string, unknown>[];
+    .query(`SELECT * FROM projects WHERE ownerId = ? ORDER BY ${sort} DESC LIMIT ? OFFSET ?`)
+    .all(me, pageSize, (page - 1) * pageSize) as Record<string, unknown>[];
   return ok(c, { items: rows.map(rowToProject), total, page, pageSize, sort: sort === "createdAt" ? "created" : "updated" });
 });
 
@@ -68,8 +75,8 @@ projectsRoutes.post("/", async (c) => {
     JSON.stringify({ id, name, version: 1, createdAt: new Date(t).toISOString() }, null, 2),
     "utf-8",
   );
-  db.run("INSERT INTO projects (id, name, directory, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?)", [
-    id, name, dir, t, t,
+  db.run("INSERT INTO projects (id, name, directory, ownerId, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?)", [
+    id, name, dir, actor(c).id, t, t,
   ]);
   const row = db.query("SELECT * FROM projects WHERE id = ?").get(id) as Record<string, unknown>;
   return ok(c, rowToProject(row));
@@ -106,12 +113,13 @@ projectsRoutes.post("/quick", async (c) => {
     JSON.stringify({ id, name, version: 1, createdAt: new Date(t).toISOString() }, null, 2),
     "utf-8",
   );
-  db.run("INSERT INTO projects (id, name, directory, stylePackId, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?)", [
-    id, name, dir, body.stylePackId ?? null, t, t,
-  ]);
+  db.run(
+    "INSERT INTO projects (id, name, directory, stylePackId, ownerId, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?)",
+    [id, name, dir, body.stylePackId ?? null, actor(c).id, t, t],
+  );
 
   let seriesId = body.seriesId?.trim() || null;
-  if (seriesId && !getSeries(seriesId)) return err(c, "这部连载不存在", 404);
+  if (seriesId && !ownsSeries(actor(c).id, seriesId)) return err(c, "这部连载不存在", 404);
   if (!seriesId && body.seriesName?.trim()) {
     seriesId = createSeries({
       name: body.seriesName.trim(),
@@ -132,6 +140,8 @@ projectsRoutes.post("/quick", async (c) => {
 
 projectsRoutes.post("/:id/ensure-series", async (c) => {
   const body = (await c.req.json().catch(() => ({}))) as { name?: string; kind?: SeriesKind };
+  const pid = c.req.param("id");
+  if (!mine(c, pid)) return err(c, "项目不存在", 404);
   try {
     const series = ensureProjectSeries(
       c.req.param("id"),
@@ -146,16 +156,20 @@ projectsRoutes.post("/:id/ensure-series", async (c) => {
 });
 
 projectsRoutes.get("/:id", (c) => {
-  const row = db.query("SELECT * FROM projects WHERE id = ?").get(c.req.param("id")) as Record<string, unknown> | null;
+  const id = c.req.param("id");
+  if (!mine(c, id)) return err(c, "项目不存在", 404);
+  const row = db.query("SELECT * FROM projects WHERE id = ?").get(id) as Record<string, unknown> | null;
   if (!row) return err(c, "项目不存在", 404);
   return ok(c, rowToProject(row));
 });
 
 projectsRoutes.put("/:id/script", async (c) => {
   const body = (await c.req.json().catch(() => ({}))) as { script?: ScriptDoc };
+  const id = c.req.param("id");
+  if (!mine(c, id)) return err(c, "项目不存在", 404);
   if (!body.script?.scenes?.length) return err(c, "没有可存的剧本");
   try {
-    saveProjectScript(c.req.param("id"), body.script);
+    saveProjectScript(id, body.script);
     return ok(c, { saved: true });
   } catch (e) {
     return err(c, e instanceof Error ? e.message : String(e), 404);
@@ -163,7 +177,9 @@ projectsRoutes.put("/:id/script", async (c) => {
 });
 
 projectsRoutes.get("/:id/script", (c) => {
-  const script = loadProjectScript(c.req.param("id"));
+  const id = c.req.param("id");
+  if (!mine(c, id)) return err(c, "项目不存在", 404);
+  const script = loadProjectScript(id);
   if (!script) return err(c, "这部还没有剧本", 404);
   return ok(c, { script });
 });
@@ -171,6 +187,7 @@ projectsRoutes.get("/:id/script", (c) => {
 projectsRoutes.patch("/:id", async (c) => {
   const body = (await c.req.json().catch(() => ({}))) as { name?: string; stylePackId?: string | null };
   const id = c.req.param("id");
+  if (!mine(c, id)) return err(c, "项目不存在", 404);
   const exists = db.query("SELECT id FROM projects WHERE id = ?").get(id);
   if (!exists) return err(c, "项目不存在", 404);
   const name = body.name?.trim();
@@ -185,7 +202,9 @@ projectsRoutes.patch("/:id", async (c) => {
 
 /** 仅从列表移除，不删除磁盘文件 */
 projectsRoutes.delete("/:id", (c) => {
-  const res = db.run("DELETE FROM projects WHERE id = ?", [c.req.param("id")]);
+  const id = c.req.param("id");
+  if (!mine(c, id)) return err(c, "项目不存在", 404);
+  const res = db.run("DELETE FROM projects WHERE id = ? AND ownerId = ?", [id, actor(c).id]);
   if (res.changes === 0) return err(c, "项目不存在", 404);
   return ok(c, { removed: true, filesKept: true });
 });

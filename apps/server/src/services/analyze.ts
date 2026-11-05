@@ -20,6 +20,7 @@ import { newId, now } from "../lib/resp";
 import { absInLibrary, storeAsset } from "./library";
 import { getEndpoint, listEndpoints, resolveEndpoint } from "./models";
 import { chatMetered, recordUsage } from "./usage";
+import { currentUserId } from "../lib/ctx";
 
 const DOWNLOAD_FAIL = "这条链拉不下来。把视频保存到本地，导入「资产库」，点开视频用「复刻爆款视频」。";
 
@@ -33,6 +34,7 @@ interface ReportRow {
   transcript: string | null;
   wordsJson?: string | null;
   usedVision?: number;
+  ownerId?: string | null;
   createdAt: number;
 }
 
@@ -58,13 +60,18 @@ function rowToReport(row: ReportRow): AnalysisReport {
   };
 }
 
-export function listReports(): AnalysisReport[] {
-  return (db.query("SELECT * FROM analysis_reports ORDER BY createdAt DESC LIMIT 50").all() as ReportRow[]).map(rowToReport);
+export function listReports(ownerId?: string): AnalysisReport[] {
+  const rows = ownerId
+    ? (db.query("SELECT * FROM analysis_reports WHERE ownerId = ? ORDER BY createdAt DESC LIMIT 50").all(ownerId) as ReportRow[])
+    : (db.query("SELECT * FROM analysis_reports ORDER BY createdAt DESC LIMIT 50").all() as ReportRow[]);
+  return rows.map(rowToReport);
 }
 
-export function getReport(id: string): AnalysisReport | null {
+export function getReport(id: string, ownerId?: string): AnalysisReport | null {
   const row = db.query("SELECT * FROM analysis_reports WHERE id = ?").get(id) as ReportRow | null;
-  return row ? rowToReport(row) : null;
+  if (!row) return null;
+  if (ownerId && row.ownerId && row.ownerId !== ownerId) return null;
+  return rowToReport(row);
 }
 
 export function frameAbs(reportId: string, file: string): string {
@@ -245,8 +252,8 @@ export const analyzeRunHandler: JobHandler = async (job, ctx) => {
     createdAt: now(),
   };
   db.run(
-    `INSERT INTO analysis_reports (id, sourceUrl, videoAssetId, title, reportJson, framesJson, transcript, wordsJson, usedVision, createdAt)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO analysis_reports (id, sourceUrl, videoAssetId, title, reportJson, framesJson, transcript, wordsJson, usedVision, ownerId, createdAt)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       report.id,
       report.sourceUrl,
@@ -257,6 +264,7 @@ export const analyzeRunHandler: JobHandler = async (job, ctx) => {
       transcript,
       JSON.stringify(words),
       usedVision ? 1 : 0,
+      currentUserId() ?? null,
       report.createdAt,
     ],
   );

@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { getAdapter, PREVIEW_LINE } from "@vw/models";
 import { jobQueue } from "../jobs/queue";
 import { err, ok } from "../lib/resp";
+import { actor, ownsAsset, ownsProject } from "../lib/auth";
 import { speakOne } from "../services/dub";
 import { listEndpoints, resolveEndpoint } from "../services/models";
 import { chatMetered } from "../services/usage";
@@ -9,6 +10,14 @@ import { chatMetered } from "../services/usage";
 const previewCache = new Map<string, { assetId: string; durationMs: number }>();
 
 export const genRoutes = new Hono();
+
+/** 引用了不属于自己的项目/素材，一律当作不存在 */
+function foreignProject(c: { get: (k: "user") => { id: string } }, projectId?: string | null): boolean {
+  return Boolean(projectId) && !ownsProject(c.get("user").id, projectId);
+}
+function foreignAsset(c: { get: (k: "user") => { id: string } }, assetId?: string | null): boolean {
+  return Boolean(assetId) && !ownsAsset(c.get("user").id, assetId);
+}
 
 /** 同步 LLM 对话（用于意图识别、分镜拆解等轻量调用；长任务走 job） */
 genRoutes.post("/chat", async (c) => {
@@ -42,6 +51,8 @@ genRoutes.post("/image", async (c) => {
     replaceAssetId?: string;
   };
   if (!body.prompt?.trim()) return err(c, "缺少提示词");
+  if (foreignProject(c, body.projectId)) return err(c, "项目不存在", 404);
+  if (foreignAsset(c, body.replaceAssetId)) return err(c, "素材不存在", 404);
   const job = jobQueue.submit(
     "gen.image",
     {
@@ -52,6 +63,7 @@ genRoutes.post("/image", async (c) => {
       replaceAssetId: body.replaceAssetId,
     },
     body.projectId ?? null,
+    actor(c).id,
   );
   return ok(c, job);
 });
@@ -65,13 +77,15 @@ genRoutes.post("/tts", async (c) => {
     voice?: string;
   };
   if (!body.text?.trim()) return err(c, "先写要说的话");
+  if (foreignProject(c, body.projectId)) return err(c, "项目不存在", 404);
   if (!listEndpoints("tts").some((e) => e.enabled)) {
     return err(c, "还没有语音模型。到「模型」页加一个，模型名一般是 tts-1。", 422);
   }
   const job = jobQueue.submit(
     "gen.tts",
-    { text: body.text.trim(), endpointId: body.endpointId, voice: body.voice },
+    { text: body.text.trim(), endpointId: body.endpointId, voice: body.voice, projectId: body.projectId },
     body.projectId ?? null,
+    actor(c).id,
   );
   return ok(c, job);
 });
@@ -84,6 +98,7 @@ genRoutes.post("/tts-preview", async (c) => {
     projectId?: string;
   };
   if (!body.voice?.trim()) return err(c, "先选一个音色");
+  if (foreignProject(c, body.projectId)) return err(c, "项目不存在", 404);
   if (!listEndpoints("tts").some((e) => e.enabled)) {
     return err(c, "还没有语音模型。到「模型」页加一个。", 422);
   }
@@ -118,6 +133,9 @@ genRoutes.post("/video", async (c) => {
     autoDub?: boolean;
   };
   if (!body.prompt?.trim()) return err(c, "缺少提示词");
+  if (foreignProject(c, body.projectId)) return err(c, "项目不存在", 404);
+  if (foreignAsset(c, body.imageAssetId)) return err(c, "首帧素材不存在", 404);
+  if (foreignAsset(c, body.lastFrameAssetId)) return err(c, "尾帧素材不存在", 404);
   if (!listEndpoints("video").some((e) => e.enabled)) {
     return err(c, "还没有视频模型。到「模型」页加可灵、豆包或 OpenAI 兼容的视频端点。", 422);
   }
@@ -134,6 +152,7 @@ genRoutes.post("/video", async (c) => {
       autoDub: body.autoDub !== false,
     },
     body.projectId ?? null,
+    actor(c).id,
   );
   return ok(c, job);
 });
@@ -148,10 +167,13 @@ genRoutes.post("/ffmpeg", async (c) => {
     projectId?: string;
   };
   if (!body.assetId) return err(c, "先选一段素材");
+  if (foreignProject(c, body.projectId)) return err(c, "项目不存在", 404);
+  if (foreignAsset(c, body.assetId) || foreignAsset(c, body.assetIdB)) return err(c, "素材不存在", 404);
   const job = jobQueue.submit(
     "media.transcode",
     { op: body.op ?? "transcode", assetId: body.assetId, assetIdB: body.assetIdB, text: body.text, atMs: body.atMs },
     body.projectId ?? null,
+    actor(c).id,
   );
   return ok(c, job);
 });

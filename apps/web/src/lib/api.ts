@@ -10,6 +10,7 @@ export async function api<T>(path: string, init?: RequestInit): Promise<T> {
     /* 非 JSON 响应 */
   }
   if (!res.ok || !json || json.ok === false) {
+    if (res.status === 401) window.dispatchEvent(new Event("vw:unauth"));
     const message = json && json.ok === false ? json.error : `请求失败 (${res.status})`;
     throw new Error(message);
   }

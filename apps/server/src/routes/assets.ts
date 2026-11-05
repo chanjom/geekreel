@@ -5,6 +5,8 @@ import { assetTypeFromExt, extFromFileName, mimeFromExt, type AssetKind, type As
 import { db } from "../db";
 import { revealInFileManager } from "../lib/openPath";
 import { err, ok } from "../lib/resp";
+import { actor, ownsAsset, ownsProject } from "../lib/auth";
+import { multiUser } from "../config";
 import {
   absInLibrary,
   assetStats,
@@ -35,6 +37,12 @@ assetsRoutes.get("/", (c) => {
 
   const where: string[] = [];
   const params: SQLQueryBindings[] = [];
+
+  // 只看得见自己的：挂项目的随项目归属，素材库里的看 ownerId
+  const me = actor(c).id;
+  where.push("(projectId IN (SELECT id FROM projects WHERE ownerId = ?) OR (projectId IS NULL AND ownerId = ?))");
+  params.push(me, me);
+
   if (type) { where.push("type = ?"); params.push(type); }
   if (month) { where.push("path LIKE ?"); params.push(`%/${month}/%`); }
   if (folder) {
@@ -73,6 +81,10 @@ assetsRoutes.post("/batch", async (c) => {
   let deleted = 0;
   const blocked: string[] = [];
   for (const id of ids) {
+    if (!ownsAsset(actor(c).id, id)) {
+      blocked.push(id);
+      continue;
+    }
     try {
       if (deleteAsset(id)) deleted += 1;
     } catch {
@@ -88,6 +100,7 @@ assetsRoutes.post("/cache/clear", (c) => ok(c, clearLibraryCache()));
 assetsRoutes.post("/import", async (c) => {
   const body = await c.req.parseBody();
   const projectId = typeof body.projectId === "string" ? body.projectId : null;
+  if (projectId && !ownsProject(actor(c).id, projectId)) return err(c, "项目不存在", 404);
   const raw = body["files"];
   const files = (Array.isArray(raw) ? raw : raw ? [raw] : []).filter(
     (f): f is File => typeof f === "object" && f !== null && "arrayBuffer" in f,
@@ -110,6 +123,7 @@ assetsRoutes.post("/import", async (c) => {
       ext,
       source: "import",
       projectId,
+      ownerId: actor(c).id,
       data: await file.arrayBuffer(),
     });
     imported.push(asset);
@@ -119,9 +133,12 @@ assetsRoutes.post("/import", async (c) => {
 
 /** 从本机路径导入（拷贝入库），适合大文件免上传 */
 assetsRoutes.post("/import-path", async (c) => {
+  // 能读服务器任意路径，远程部署直接关掉
+  if (multiUser) return err(c, "远程部署不支持按服务器路径导入，请用上传", 403);
   const body = (await c.req.json().catch(() => ({}))) as { paths?: string[]; projectId?: string };
   const paths = body.paths ?? [];
   if (paths.length === 0) return err(c, "未提供路径");
+  if (body.projectId && !ownsProject(actor(c).id, body.projectId)) return err(c, "项目不存在", 404);
 
   const imported = [];
   const skipped: Array<{ path: string; reason: string }> = [];
@@ -143,6 +160,7 @@ assetsRoutes.post("/import-path", async (c) => {
       ext,
       source: "import",
       projectId: body.projectId ?? null,
+      ownerId: actor(c).id,
       fromPath: p,
     });
     imported.push(asset);
@@ -150,9 +168,13 @@ assetsRoutes.post("/import-path", async (c) => {
   return ok(c, { imported, skipped });
 });
 
-assetsRoutes.get("/:id/refs", (c) => ok(c, listAssetRefs(c.req.param("id"))));
+assetsRoutes.get("/:id/refs", (c) => {
+  if (!ownsAsset(actor(c).id, c.req.param("id"))) return err(c, "资产不存在", 404);
+  return ok(c, listAssetRefs(c.req.param("id")));
+});
 
 assetsRoutes.get("/:id", (c) => {
+  if (!ownsAsset(actor(c).id, c.req.param("id"))) return err(c, "资产不存在", 404);
   const asset = getAsset(c.req.param("id"));
   if (!asset) return err(c, "资产不存在", 404);
   return ok(c, asset);
@@ -165,6 +187,7 @@ assetsRoutes.patch("/:id", async (c) => {
     kind?: AssetKind;
     tags?: string[];
   };
+  if (!ownsAsset(actor(c).id, c.req.param("id"))) return err(c, "资产不存在", 404);
   if (!body.title && body.favorite === undefined && !body.kind && !body.tags) {
     return err(c, "没有要改的内容");
   }
@@ -179,6 +202,7 @@ assetsRoutes.patch("/:id", async (c) => {
 });
 
 assetsRoutes.delete("/:id", (c) => {
+  if (!ownsAsset(actor(c).id, c.req.param("id"))) return err(c, "资产不存在", 404);
   try {
     if (!deleteAsset(c.req.param("id"))) return err(c, "资产不存在", 404);
     return ok(c, { deleted: true });
@@ -188,6 +212,7 @@ assetsRoutes.delete("/:id", (c) => {
 });
 
 assetsRoutes.post("/:id/reveal", (c) => {
+  if (!ownsAsset(actor(c).id, c.req.param("id"))) return err(c, "资产不存在", 404);
   const asset = getAsset(c.req.param("id"));
   if (!asset) return err(c, "资产不存在", 404);
   const abs = absInLibrary(asset.path);
@@ -198,6 +223,7 @@ assetsRoutes.post("/:id/reveal", (c) => {
 
 /** 取文件：variant = original | thumb | proxy，支持 Range（视频拖动播放） */
 assetsRoutes.get("/:id/file", async (c) => {
+  if (!ownsAsset(actor(c).id, c.req.param("id"))) return err(c, "资产不存在", 404);
   const asset = getAsset(c.req.param("id"));
   if (!asset) return err(c, "资产不存在", 404);
 

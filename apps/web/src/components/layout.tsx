@@ -1,11 +1,12 @@
 import { useMemo, useState } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { PublicSettings } from "@vw/core";
 import { api, apiJson } from "../lib/api";
 import { useT } from "../lib/i18n";
 import { usePrefs } from "../lib/prefs";
 import { useAppStore } from "../lib/store";
+import { useAuth } from "../lib/auth";
 import { BrandMark } from "./brand";
 import { iconAnalyze, iconBook, iconBox, iconCanvas, iconChat, iconCpu, iconFolder, iconPalette, iconRadar, iconScissors, iconSeries, iconSettings, iconTasks } from "../lib/icons";
 
@@ -79,6 +80,7 @@ export function Layout() {
               {settings.libraryRoot}
             </div>
           )}
+          <UserBox compact={compact} />
         </div>
       </aside>
 
@@ -86,6 +88,39 @@ export function Layout() {
         <Outlet />
         <FinishNudge />
       </main>
+    </div>
+  );
+}
+
+/** 侧栏底部：当前账号 + 退出（单机模式不显示） */
+function UserBox({ compact }: { compact: boolean }) {
+  const { user, config, logout } = useAuth();
+  const nav = useNavigate();
+  const qc = useQueryClient();
+  if (!config?.multiUser || !user) return null;
+
+  async function out() {
+    await logout();
+    qc.clear();
+    nav("/login", { replace: true });
+  }
+
+  return (
+    <div className="border-t border-line pt-2">
+      <div className={`flex items-center gap-1.5 ${compact ? "justify-center" : ""}`} title={user.email}>
+        <span className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-panel-2 text-[9px] text-accent">
+          {(user.name || user.email).slice(0, 1).toUpperCase()}
+        </span>
+        {!compact && <span className="truncate text-fg-dim">{user.name || user.email}</span>}
+        {!compact && user.role === "admin" && <span className="shrink-0 rounded bg-panel-2 px-1 text-[9px] text-accent">管理</span>}
+      </div>
+      <button
+        type="button"
+        onClick={out}
+        className="mt-1.5 w-full rounded border border-line py-1 text-center text-[10px] text-fg-faint transition hover:border-accent-dim hover:text-fg-dim"
+      >
+        {compact ? "退" : "退出登录"}
+      </button>
     </div>
   );
 }

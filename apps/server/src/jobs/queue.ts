@@ -2,6 +2,7 @@ import type { Job, JobStatus } from "@vw/core";
 import type { SQLQueryBindings } from "bun:sqlite";
 import { db } from "../db";
 import { newId, now } from "../lib/resp";
+import { runAs } from "../lib/ctx";
 import { wsHub } from "../ws";
 
 export interface JobContext {
@@ -53,6 +54,8 @@ class JobQueue {
       q?: string;
       type?: string;
       projectId?: string | null;
+      /** 只看这个用户的任务 */
+      ownerId?: string;
     } = {},
   ): {
     items: Job[];
@@ -77,6 +80,10 @@ class JobQueue {
     } else if (opts.projectId) {
       where.push("projectId = ?");
       params.push(opts.projectId);
+    }
+    if (opts.ownerId) {
+      where.push("ownerId = ?");
+      params.push(opts.ownerId);
     }
     if (opts.q?.trim()) {
       where.push("(type LIKE ? OR IFNULL(message, '') LIKE ? OR IFNULL(error, '') LIKE ?)");
@@ -103,12 +110,18 @@ class JobQueue {
     return job;
   }
 
-  submit(type: string, payload: unknown, projectId: string | null = null): Job {
+  submit(type: string, payload: unknown, projectId: string | null = null, ownerId: string | null = null): Job {
     if (!this.handlers.has(type)) throw new Error(`未注册的任务类型: ${type}`);
     const id = newId();
+    // 归属：显式传入优先；否则随项目主人推导
+    const owner =
+      ownerId ??
+      (projectId
+        ? ((db.query("SELECT ownerId FROM projects WHERE id = ?").get(projectId) as { ownerId?: string } | null)?.ownerId ?? null)
+        : null);
     db.run(
-      "INSERT INTO jobs (id, projectId, type, status, progress, payloadJson, createdAt) VALUES (?, ?, ?, 'queued', 0, ?, ?)",
-      [id, projectId, type, JSON.stringify(payload ?? {}), now()],
+      "INSERT INTO jobs (id, projectId, type, status, progress, payloadJson, ownerId, createdAt) VALUES (?, ?, ?, 'queued', 0, ?, ?, ?)",
+      [id, projectId, type, JSON.stringify(payload ?? {}), owner, now()],
     );
     const job = this.get(id)!;
     wsHub.broadcast({ type: "job.upsert", job });
@@ -160,12 +173,12 @@ class JobQueue {
           .get(type) as Record<string, unknown> | null;
         if (!row) break;
         const job = this.rowToJob(row);
-        void this.run(job, handler);
+        void this.run(job, handler, (row.ownerId as string | null | undefined) ?? null);
       }
     }
   }
 
-  private async run(job: Job, handler: JobHandler) {
+  private async run(job: Job, handler: JobHandler, ownerId: string | null = null) {
     const abort = new AbortController();
     this.running.set(job.id, { abort, type: job.type });
     this.update(job.id, { status: "running", startedAt: now() });
@@ -181,7 +194,8 @@ class JobQueue {
     };
 
     try {
-      const result = await handler(this.get(job.id)!, ctx);
+      // 任务按发起人身份执行：端点解析、素材入库、用量记账都按这个用户走
+      const result = await runAs(ownerId, () => handler(this.get(job.id)!, ctx));
       this.update(job.id, {
         status: abort.signal.aborted ? "canceled" : "done",
         progress: 1,

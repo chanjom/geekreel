@@ -8,13 +8,18 @@ import { jobQueue } from "../jobs/queue";
 import { revealInFileManager } from "../lib/openPath";
 import { isAbsolutePath } from "../lib/paths";
 import { err, ok } from "../lib/resp";
+import { actor, requireAdmin } from "../lib/auth";
 import { libraryRoot, setLibraryRoot } from "../services/library";
 
 export const settingsRoutes = new Hono();
 
-async function publicSettings(): Promise<PublicSettings> {
+async function publicSettings(userId: string): Promise<PublicSettings> {
   const bins = await detectBins();
-  const count = db.query("SELECT COUNT(*) AS n FROM assets").get() as { n: number };
+  const count = db
+    .query(
+      "SELECT COUNT(*) AS n FROM assets WHERE projectId IN (SELECT id FROM projects WHERE ownerId = ?) OR (projectId IS NULL AND ownerId = ?)",
+    )
+    .get(userId, userId) as { n: number };
   return {
     libraryRoot: libraryRoot(),
     dataDir,
@@ -29,16 +34,16 @@ async function publicSettings(): Promise<PublicSettings> {
   };
 }
 
-settingsRoutes.get("/", async (c) => ok(c, await publicSettings()));
+settingsRoutes.get("/", async (c) => ok(c, await publicSettings(actor(c).id)));
 
-settingsRoutes.post("/reveal", (c) => {
+settingsRoutes.post("/reveal", requireAdmin, (c) => {
   const root = libraryRoot();
   if (!existsSync(root)) return err(c, "目录不存在", 404);
   const proc = revealInFileManager(root);
   return ok(c, { opened: true, pid: proc.pid });
 });
 
-settingsRoutes.put("/", async (c) => {
+settingsRoutes.put("/", requireAdmin, async (c) => {
   const body = (await c.req.json().catch(() => ({}))) as { libraryRoot?: string };
   const root = body.libraryRoot?.trim();
   if (!root) return err(c, "缺少 libraryRoot");
@@ -55,8 +60,8 @@ settingsRoutes.put("/", async (c) => {
   const count = db.query("SELECT COUNT(*) AS n FROM assets").get() as { n: number };
   if (old !== root && count.n > 0) {
     const job = jobQueue.submit("asset.migrate", { from: old, to: root });
-    return ok(c, { ...(await publicSettings()), migrateJobId: job.id, message: "正在把旧文件搬到新目录，去任务中心看进度。" });
+    return ok(c, { ...(await publicSettings(actor(c).id)), migrateJobId: job.id, message: "正在把旧文件搬到新目录，去任务中心看进度。" });
   }
   setLibraryRoot(root);
-  return ok(c, await publicSettings());
+  return ok(c, await publicSettings(actor(c).id));
 });

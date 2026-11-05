@@ -2,8 +2,22 @@ import { Hono } from "hono";
 import type { JobStatus } from "@vw/core";
 import { jobQueue } from "../jobs/queue";
 import { err, ok } from "../lib/resp";
+import { actor } from "../lib/auth";
+import { db } from "../db";
 
 export const jobsRoutes = new Hono();
+
+/** 任务归属：自己的任务，或自己项目下的任务 */
+function mine(jobId: string, userId: string) {
+  const row = db.query("SELECT ownerId, projectId FROM jobs WHERE id = ?").get(jobId) as
+    | { ownerId: string | null; projectId: string | null }
+    | null;
+  if (!row) return false;
+  if (row.ownerId) return row.ownerId === userId;
+  if (!row.projectId) return false;
+  const p = db.query("SELECT ownerId FROM projects WHERE id = ?").get(row.projectId) as { ownerId: string | null } | null;
+  return p?.ownerId === userId;
+}
 
 jobsRoutes.get("/", (c) => {
   const raw = c.req.query("status");
@@ -26,6 +40,7 @@ jobsRoutes.get("/", (c) => {
     q,
     type,
     projectId,
+    ownerId: actor(c).id,
     limit: pageSize,
     offset: (page - 1) * pageSize,
   });
@@ -33,18 +48,21 @@ jobsRoutes.get("/", (c) => {
 });
 
 jobsRoutes.get("/:id", (c) => {
+  if (!mine(c.req.param("id"), actor(c).id)) return err(c, "任务不存在", 404);
   const job = jobQueue.get(c.req.param("id"));
   if (!job) return err(c, "任务不存在", 404);
   return ok(c, job);
 });
 
 jobsRoutes.post("/:id/cancel", (c) => {
+  if (!mine(c.req.param("id"), actor(c).id)) return err(c, "任务不存在", 404);
   const job = jobQueue.cancel(c.req.param("id"));
   if (!job) return err(c, "任务不存在", 404);
   return ok(c, job);
 });
 
 jobsRoutes.post("/:id/retry", (c) => {
+  if (!mine(c.req.param("id"), actor(c).id)) return err(c, "任务不存在", 404);
   const job = jobQueue.retry(c.req.param("id"));
   if (!job) return err(c, "任务不存在", 404);
   return ok(c, job);

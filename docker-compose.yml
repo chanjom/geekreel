@@ -1,0 +1,30 @@
+services:
+  geekreel:
+    build: .
+    image: geekreel:latest
+    container_name: geekreel
+    restart: unless-stopped
+    ports:
+      # 只监听本机，外网一律走 nginx
+      - "127.0.0.1:4780:4780"
+    environment:
+      # 多人模式：必须登录，数据按用户隔离
+      VW_MULTI_USER: "1"
+      # 开自助注册；关掉就只能在库里手工建号
+      VW_ALLOW_REGISTER: "${VW_ALLOW_REGISTER:-1}"
+      # 设了就要填邀请码才能注册，公网部署强烈建议设
+      VW_REGISTER_CODE: "${VW_REGISTER_CODE:-}"
+      # 挂在 https 反代后面时改成 1，否则 cookie 不带 Secure
+      VW_SECURE_COOKIE: "${VW_SECURE_COOKIE:-0}"
+      VW_SESSION_DAYS: "${VW_SESSION_DAYS:-30}"
+    volumes:
+      # 数据库 + 密钥（务必备份，丢了等于所有账号失效）
+      - ./data:/data
+      # 项目与素材；容量要给足，视频很占地方
+      - ./library:/library
+    # 视频转码吃 CPU，按机器核数调整
+    deploy:
+      resources:
+        limits:
+          cpus: "2"
+          memory: 4G

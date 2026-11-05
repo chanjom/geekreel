@@ -11,6 +11,7 @@ import {
 import { recomputeUsageCosts } from "./usage";
 import { db } from "../db";
 import { decrypt, encrypt, isPlaceholderSecret, maskSecret } from "../lib/crypto";
+import { currentUserId } from "../lib/ctx";
 import { newId, now } from "../lib/resp";
 
 /**
@@ -27,6 +28,7 @@ interface EndpointRow {
   vision?: number;
   enabled: number;
   isDefault: number;
+  ownerId?: string | null;
   createdAt: number;
 }
 
@@ -51,17 +53,26 @@ function rowToEndpoint(row: EndpointRow, withKey = false): ModelEndpoint {
     webSearch: row.webSearch === 1,
     vision: Number(row.vision) === 1,
     enabled: Number(row.enabled) === 1,
+    ownerId: row.ownerId ?? null,
     isDefault: Number(row.isDefault) === 1,
     createdAt: row.createdAt,
   };
 }
 
 export function listEndpoints(capability?: Capability): ModelEndpoint[] {
-  const rows = (
-    capability
-      ? db.query("SELECT * FROM model_endpoints WHERE capability = ? ORDER BY createdAt ASC").all(capability)
-      : db.query("SELECT * FROM model_endpoints ORDER BY createdAt ASC").all()
-  ) as EndpointRow[];
+  const uid = currentUserId();
+  const where: string[] = [];
+  const params: string[] = [];
+  if (capability) {
+    where.push("capability = ?");
+    params.push(capability);
+  }
+  if (uid) {
+    where.push("ownerId = ?");
+    params.push(uid);
+  }
+  const sql = `SELECT * FROM model_endpoints${where.length ? ` WHERE ${where.join(" AND ")}` : ""} ORDER BY createdAt ASC`;
+  const rows = db.query(sql).all(...params) as EndpointRow[];
   return rows.map((r) => rowToEndpoint(r));
 }
 
@@ -95,9 +106,19 @@ export function createEndpoint(input: {
     delete config.secretKey;
   }
   db.run(
-    `INSERT INTO model_endpoints (id, name, adapterType, capability, configJson, webSearch, vision, createdAt)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-    [id, input.name, input.adapterType, input.capability, JSON.stringify(config), input.webSearch ? 1 : 0, input.vision ? 1 : 0, now()],
+    `INSERT INTO model_endpoints (id, name, adapterType, capability, configJson, webSearch, vision, ownerId, createdAt)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [
+      id,
+      input.name,
+      input.adapterType,
+      input.capability,
+      JSON.stringify(config),
+      input.webSearch ? 1 : 0,
+      input.vision ? 1 : 0,
+      currentUserId() ?? null,
+      now(),
+    ],
   );
   return getEndpoint(id)!;
 }
@@ -249,21 +270,30 @@ export async function syncChannelPrices(): Promise<{
   return { filled, skipped };
 }
 
+/**
+ * 解析可用端点。
+ * 多人部署下只能在"自己的端点"里选：显式传入别人的 id 直接报不存在，
+ * 没有默认时也只回落到自己的端点，不会串用别人的 key 和额度。
+ */
 export function resolveEndpoint(capability: Capability, preferredId?: string): ModelEndpoint | null {
+  const uid = currentUserId();
   if (preferredId) {
     const ep = getEndpoint(preferredId, true);
     if (!ep) throw new Error("指定的模型端点不存在");
+    if (uid && ep.ownerId && ep.ownerId !== uid) throw new Error("指定的模型端点不存在");
     if (!ep.enabled) throw new Error(`端点「${ep.name}」已停用`);
     if (ep.capability !== capability) throw new Error(`端点「${ep.name}」不是${capability}能力`);
     return ep;
   }
+  const own = uid ? " AND ownerId = ?" : "";
+  const params = uid ? [capability, uid] : [capability];
   const row = db
-    .query("SELECT * FROM model_endpoints WHERE capability = ? AND enabled = 1 AND isDefault = 1 LIMIT 1")
-    .get(capability) as EndpointRow | null;
+    .query(`SELECT * FROM model_endpoints WHERE capability = ? AND enabled = 1 AND isDefault = 1${own} LIMIT 1`)
+    .get(...params) as EndpointRow | null;
   if (row) return rowToEndpoint(row, true);
   // 无默认时取该能力第一个可用端点
   const fallback = db
-    .query("SELECT * FROM model_endpoints WHERE capability = ? AND enabled = 1 ORDER BY createdAt ASC LIMIT 1")
-    .get(capability) as EndpointRow | null;
+    .query(`SELECT * FROM model_endpoints WHERE capability = ? AND enabled = 1${own} ORDER BY createdAt ASC LIMIT 1`)
+    .get(...params) as EndpointRow | null;
   return fallback ? rowToEndpoint(fallback, true) : null;
 }

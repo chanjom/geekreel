@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import type { SeriesKind } from "@vw/core";
 import { clipNovel, fetchNovelText, looksLikeHttpUrl } from "@vw/pipeline";
 import { err, ok } from "../lib/resp";
+import { actor, ownsSeries } from "../lib/auth";
 import { rewriteNovelStory } from "../services/pipeline";
 import { createSeries, deleteSeries, listSeries, listSeriesPage, seriesDetail } from "../services/series";
 
@@ -9,11 +10,12 @@ export const seriesRoutes = new Hono();
 
 seriesRoutes.get("/", (c) => {
   const q = c.req.query("q") ?? "";
+  const me = actor(c).id;
   const pageRaw = c.req.query("page");
-  if (!pageRaw && !c.req.query("pageSize") && !q) return ok(c, listSeries());
+  if (!pageRaw && !c.req.query("pageSize") && !q) return ok(c, listSeries(me));
   const page = Math.max(Number(pageRaw ?? 1) || 1, 1);
   const pageSize = Math.min(Math.max(Number(c.req.query("pageSize") ?? 8) || 8, 1), 50);
-  return ok(c, listSeriesPage(q, page, pageSize));
+  return ok(c, listSeriesPage(q, page, pageSize, me));
 });
 
 seriesRoutes.post("/", async (c) => {
@@ -54,12 +56,14 @@ seriesRoutes.post("/rewrite", async (c) => {
 });
 
 seriesRoutes.get("/:id", (c) => {
+  if (!ownsSeries(actor(c).id, c.req.param("id"))) return err(c, "这部连载不存在", 404);
   const s = seriesDetail(c.req.param("id"));
   if (!s) return err(c, "这部连载不存在", 404);
   return ok(c, s);
 });
 
 seriesRoutes.delete("/:id", (c) => {
+  if (!ownsSeries(actor(c).id, c.req.param("id"))) return err(c, "这部连载不存在", 404);
   if (!deleteSeries(c.req.param("id"))) return err(c, "这部连载不存在", 404);
   return ok(c, { deleted: true });
 });

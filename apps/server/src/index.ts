@@ -19,6 +19,17 @@ import { listPacks } from "./services/styles";
 import { styleImportHandler } from "./services/styleImport";
 import { libraryRoot } from "./services/library";
 import { detectYtdlp } from "@vw/analyze";
+import { adoptOrphans, ensureLocalAdmin, purgeExpiredSessions } from "./lib/auth";
+import { multiUser } from "./config";
+
+// 单机模式：建一个本机管理员，并把历史数据收归名下，行为与旧版完全一致。
+// 多人模式：等第一个注册者成为管理员后再接管；此处只清理过期会话。
+if (!multiUser) {
+  const admin = ensureLocalAdmin();
+  const moved = adoptOrphans(admin.id);
+  if (moved > 0) console.log(`[vw] 已有 ${moved} 条历史数据归入本机管理员`);
+}
+purgeExpiredSessions();
 
 // 注册任务处理器
 jobQueue.register("asset.index", indexAssetHandler, 2);

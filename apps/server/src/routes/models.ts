@@ -13,6 +13,7 @@ import {
   type VoiceFamily,
 } from "@vw/models";
 import { err, ok } from "../lib/resp";
+import { actor, ownsEndpoint } from "../lib/auth";
 import {
   applyChannelPrices,
   attachChannelPrices,
@@ -46,7 +47,6 @@ modelsRoutes.get("/endpoints", (c) => {
   const capability = c.req.query("capability") as Capability | undefined;
   return ok(c, listEndpoints(capability));
 });
-
 modelsRoutes.post("/import-env", async (c) => ok(c, await importFromEnv()));
 
 /** 探测本机已装模型（Ollama / LM Studio / ComfyUI checkpoint） */
@@ -117,7 +117,7 @@ modelsRoutes.patch("/endpoints/:id", async (c) => {
     enabled?: boolean;
   };
   const existing = getEndpoint(c.req.param("id"), true);
-  if (!existing) return err(c, "端点不存在", 404);
+  if (!existing || !ownsEndpoint(actor(c).id, existing.id)) return err(c, "端点不存在", 404);
   if (existing.adapterType === "comfyui" && body.config) {
     const merged = { ...existing.config, ...body.config };
     const bad = validateComfyConfig(merged, existing.capability);
@@ -131,11 +131,13 @@ modelsRoutes.patch("/endpoints/:id", async (c) => {
 });
 
 modelsRoutes.delete("/endpoints/:id", (c) => {
+  if (!ownsEndpoint(actor(c).id, c.req.param("id"))) return err(c, "端点不存在", 404);
   if (!deleteEndpoint(c.req.param("id"))) return err(c, "端点不存在", 404);
   return ok(c, { deleted: true });
 });
 
 modelsRoutes.post("/endpoints/:id/default", (c) => {
+  if (!ownsEndpoint(actor(c).id, c.req.param("id"))) return err(c, "端点不存在", 404);
   const ep = setDefaultEndpoint(c.req.param("id"));
   if (!ep) return err(c, "端点不存在", 404);
   return ok(c, ep);
@@ -144,6 +146,7 @@ modelsRoutes.post("/endpoints/:id/default", (c) => {
 modelsRoutes.post("/prices/sync", async (c) => ok(c, await syncChannelPrices()));
 
 modelsRoutes.post("/endpoints/:id/prices", async (c) => {
+  if (!ownsEndpoint(actor(c).id, c.req.param("id"))) return err(c, "端点不存在", 404);
   try {
     return ok(c, await applyChannelPrices(c.req.param("id")));
   } catch (e) {
@@ -154,6 +157,7 @@ modelsRoutes.post("/endpoints/:id/prices", async (c) => {
 
 /** 连通性测试 */
 modelsRoutes.post("/endpoints/:id/test", async (c) => {
+  if (!ownsEndpoint(actor(c).id, c.req.param("id"))) return err(c, "端点不存在", 404);
   const ep = getEndpoint(c.req.param("id"), true);
   if (!ep) return err(c, "端点不存在", 404);
   const adapter = getAdapter(ep.adapterType);

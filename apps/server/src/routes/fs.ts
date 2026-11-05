@@ -4,12 +4,21 @@ import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { isFsRootPath } from "../lib/paths";
 import { err, ok } from "../lib/resp";
+import { multiUser } from "../config";
 
 /**
  * 本机目录浏览：供「选择文件夹」UI 使用（浏览器无法直接选服务器侧目录）。
  * 只列目录，默认隐藏点开头文件。
+ *
+ * 多人/远程部署时整组关闭：它能把服务器任意目录列出来、还能建文件夹，
+ * 对外暴露等于把机器交出去。远程用户走 /projects/quick，由系统在资产库下建目录。
  */
 export const fsRoutes = new Hono();
+
+fsRoutes.use("/*", async (c, next) => {
+  if (multiUser) return err(c, "远程部署不提供服务器目录浏览，请用「快速建项目」", 403);
+  return next();
+});
 
 const WIN_DRIVES = "\\";
 

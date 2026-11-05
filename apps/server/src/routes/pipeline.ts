@@ -1,6 +1,8 @@
 import { Hono } from "hono";
 import { jobQueue } from "../jobs/queue";
 import { err, ok } from "../lib/resp";
+import { actor, ownsProject } from "../lib/auth";
+import { db } from "../db";
 import {
   advancePipeline,
   bindPipelineEntity,
@@ -15,9 +17,32 @@ import { listEndpoints } from "../services/models";
 
 export const pipelineRoutes = new Hono();
 
-pipelineRoutes.get("/", (c) => ok(c, listPipelines(c.req.query("projectId") || undefined)));
+/** 流水线归属：跟着它的项目走 */
+function ownsPipeline(userId: string, pipelineId: string | null | undefined): boolean {
+  if (!pipelineId) return false;
+  const row = db.query("SELECT projectId FROM pipelines WHERE id = ?").get(pipelineId) as { projectId: string } | null;
+  return Boolean(row && ownsProject(userId, row.projectId));
+}
+
+pipelineRoutes.get("/", (c) => {
+  const projectId = c.req.query("projectId") || undefined;
+  if (projectId && !ownsProject(actor(c).id, projectId)) return err(c, "项目不存在", 404);
+  const all = listPipelines(projectId);
+  // 没指定项目时，只留自己的
+  return ok(
+    c,
+    all.filter((p) => ownsProject(actor(c).id, p.projectId)),
+  );
+});
+
+// 带 :id 的子路由统一校验（advance / revise / bind-entity / retry-step）
+pipelineRoutes.use("/:id/*", async (c, next) => {
+  if (!ownsPipeline(actor(c).id, c.req.param("id"))) return err(c, "流水线不存在", 404);
+  return next();
+});
 
 pipelineRoutes.get("/:id", (c) => {
+  if (!ownsPipeline(actor(c).id, c.req.param("id"))) return err(c, "流水线不存在", 404);
   const run = getPipeline(c.req.param("id"));
   if (!run) return err(c, "流水线不存在", 404);
   return ok(c, run);
@@ -38,6 +63,7 @@ pipelineRoutes.post("/run", async (c) => {
     checkpoint?: boolean;
   };
   if (!body.story?.trim() && !body.url?.trim()) return err(c, "先上传小说、贴一段正文，或给一个能打开的链接");
+  if (body.projectId && !ownsProject(actor(c).id, body.projectId)) return err(c, "项目不存在", 404);
   if (!body.packId && !listEndpoints("llm").some((e) => e.enabled)) {
     return err(c, "通读全文认人物需要文本模型。请到「模型」页添加一个。", 422);
   }
@@ -54,7 +80,7 @@ pipelineRoutes.post("/run", async (c) => {
       }
     }
   }
-  const job = jobQueue.submit("pipeline.run", body, body.projectId ?? null);
+  const job = jobQueue.submit("pipeline.run", body, body.projectId ?? null, actor(c).id);
   return ok(c, job);
 });
 
@@ -64,10 +90,11 @@ pipelineRoutes.post("/render-episode", async (c) => {
     episodeIndex?: number;
   };
   if (!body.projectId) return err(c, "先打开一个短剧项目");
+  if (!ownsProject(actor(c).id, body.projectId)) return err(c, "项目不存在", 404);
   if (!listEndpoints("image").some((e) => e.enabled) && !listEndpoints("video").some((e) => e.enabled)) {
     return err(c, "出集至少要有图片或视频模型。到「模型」页加上再来。", 422);
   }
-  const job = jobQueue.submit("pipeline.episode", body, body.projectId);
+  const job = jobQueue.submit("pipeline.episode", body, body.projectId, actor(c).id);
   return ok(c, job);
 });
 

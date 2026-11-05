@@ -131,6 +131,8 @@ export interface StoreInput {
   ext: string;
   source: AssetSource;
   projectId?: string | null;
+  /** 素材库（不挂项目）的归属人；挂项目的会自动继承项目主人 */
+  ownerId?: string | null;
   /** 三选一：内存数据 / 磁盘源文件（拷贝）/ 硬链接入库（零拷贝，同卷时） */
   data?: Uint8Array | ArrayBuffer;
   fromPath?: string;
@@ -169,10 +171,17 @@ export function storeAsset(input: StoreInput): Asset {
 
   const sizeBytes = Bun.file(abs).size;
   const name = relPath.split("/").pop()!;
+  // 挂项目的资产随项目主人；素材库里的看调用方传入的 ownerId
+  const ownerId =
+    input.ownerId ??
+    (input.projectId
+      ? ((db.query("SELECT ownerId FROM projects WHERE id = ?").get(input.projectId) as { ownerId?: string } | null)?.ownerId ??
+        null)
+      : null);
   db.run(
-    `INSERT INTO assets (id, type, path, name, title, source, projectId, sizeBytes, createdAt)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [id, input.type, relPath, name, title, input.source, input.projectId ?? null, sizeBytes, now()],
+    `INSERT INTO assets (id, type, path, name, title, source, projectId, ownerId, sizeBytes, createdAt)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [id, input.type, relPath, name, title, input.source, input.projectId ?? null, ownerId, sizeBytes, now()],
   );
 
   const asset = getAsset(id)!;

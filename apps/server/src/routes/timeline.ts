@@ -6,6 +6,7 @@ import { buildFinishTimeline } from "@vw/pipeline";
 import { db } from "../db";
 import { jobQueue } from "../jobs/queue";
 import { err, now, ok } from "../lib/resp";
+import { actor, ownsProject } from "../lib/auth";
 import { collectFinishClips } from "../services/dub";
 import { exportJianyingDraft } from "../services/jianying";
 import { listEndpoints } from "../services/models";
@@ -34,6 +35,16 @@ function isPortraitProject(projectId: string): boolean {
 }
 
 export const timelineRoutes = new Hono();
+
+// 所有带 :projectId 的接口统一校验归属，避免逐个 handler 漏掉
+timelineRoutes.use("/project/:projectId", async (c, next) => {
+  if (!ownsProject(actor(c).id, c.req.param("projectId"))) return err(c, "项目不存在", 404);
+  return next();
+});
+timelineRoutes.use("/project/:projectId/*", async (c, next) => {
+  if (!ownsProject(actor(c).id, c.req.param("projectId"))) return err(c, "项目不存在", 404);
+  return next();
+});
 
 timelineRoutes.get("/project/:projectId", (c) => {
   const abs = timelineAbs(c.req.param("projectId"));
@@ -122,11 +133,12 @@ timelineRoutes.post("/project/:projectId/finish", async (c) => {
 timelineRoutes.post("/render", async (c) => {
   const body = (await c.req.json().catch(() => ({}))) as { projectId?: string; burnSubs?: boolean };
   if (!body.projectId) return err(c, "缺少 projectId");
-  if (!projectDir(body.projectId)) return err(c, "项目不存在", 404);
+  if (!ownsProject(actor(c).id, body.projectId)) return err(c, "项目不存在", 404);
   const job = jobQueue.submit(
     "timeline.render",
     { projectId: body.projectId, burnSubs: body.burnSubs !== false },
     body.projectId,
+    actor(c).id,
   );
   return ok(c, job);
 });
@@ -135,11 +147,16 @@ timelineRoutes.post("/render", async (c) => {
 timelineRoutes.post("/tts", async (c) => {
   const body = (await c.req.json().catch(() => ({}))) as { projectId?: string; endpointId?: string };
   if (!body.projectId) return err(c, "缺少 projectId");
-  if (!projectDir(body.projectId)) return err(c, "项目不存在", 404);
+  if (!ownsProject(actor(c).id, body.projectId)) return err(c, "项目不存在", 404);
   if (!listEndpoints("tts").some((e) => e.enabled)) {
     return err(c, "还没有语音模型。到「模型」页加一个，模型名一般是 tts-1。", 422);
   }
-  const job = jobQueue.submit("timeline.tts", { projectId: body.projectId, endpointId: body.endpointId }, body.projectId);
+  const job = jobQueue.submit(
+    "timeline.tts",
+    { projectId: body.projectId, endpointId: body.endpointId },
+    body.projectId,
+    actor(c).id,
+  );
   return ok(c, job);
 });
 

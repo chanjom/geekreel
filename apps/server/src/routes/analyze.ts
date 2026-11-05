@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { jobQueue } from "../jobs/queue";
 import { err, ok } from "../lib/resp";
+import { actor } from "../lib/auth";
 import { analyzeStatus, getReport, listReports, readFrame } from "../services/analyze";
 import { looksLikeVideoUrl } from "@vw/analyze";
 
@@ -8,10 +9,10 @@ export const analyzeRoutes = new Hono();
 
 analyzeRoutes.get("/status", (c) => ok(c, analyzeStatus()));
 
-analyzeRoutes.get("/", (c) => ok(c, listReports()));
+analyzeRoutes.get("/", (c) => ok(c, listReports(actor(c).id)));
 
 analyzeRoutes.get("/:id", (c) => {
-  const report = getReport(c.req.param("id"));
+  const report = getReport(c.req.param("id"), actor(c).id);
   if (!report) return err(c, "报告不存在", 404);
   return ok(c, report);
 });

@@ -57,6 +57,8 @@ export interface ModelEndpoint {
   vision: boolean;
   enabled: boolean;
   isDefault: boolean;
+  /** 归属用户；多人部署下端点只在本用户名下可见 */
+  ownerId?: string | null;
   createdAt: number;
 }
 

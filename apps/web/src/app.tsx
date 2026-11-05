@@ -1,9 +1,11 @@
-import { useEffect } from "react";
-import { BrowserRouter, Route, Routes } from "react-router-dom";
+import { useEffect, type ReactNode } from "react";
+import { BrowserRouter, Route, Routes, Navigate } from "react-router-dom";
 import { QueryClient, QueryClientProvider, useQueryClient } from "@tanstack/react-query";
 import { notifyJobDone } from "./lib/prefs";
 import { connectWs, onWsEvent } from "./lib/store";
+import { AuthProvider, useAuth } from "./lib/auth";
 import { Layout } from "./components/layout";
+import { LoginPage } from "./pages/loginPage";
 import { HomePage } from "./pages/homePage";
 import { ProjectsPage } from "./pages/projectsPage";
 import { AssetsPage } from "./pages/assetsPage";
@@ -74,29 +76,52 @@ function WsBridge() {
   return null;
 }
 
+/** 登录守卫：多人部署下未登录直接去 /login；单机模式放行 */
+function RequireAuth({ children }: { children: ReactNode }) {
+  const { user, config, loading } = useAuth();
+  if (loading) {
+    return <div className="flex h-full items-center justify-center text-sm text-fg-dim">正在加载…</div>;
+  }
+  if (config?.multiUser && !user) return <Navigate to="/login" replace />;
+  return (
+    <>
+      <WsBridge />
+      {children}
+    </>
+  );
+}
+
 export function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <BrowserRouter>
-        <WsBridge />
-        <Routes>
-          <Route element={<Layout />}>
-            <Route index element={<HomePage />} />
-            <Route path="/drama" element={<DramaPage />} />
-            <Route path="/series" element={<SeriesPage />} />
-            <Route path="/radar" element={<RadarPage />} />
-            <Route path="/analyze" element={<AnalyzePage />} />
-            <Route path="/styles" element={<StylesPage />} />
-            <Route path="/projects" element={<ProjectsPage />} />
-            <Route path="/canvas" element={<CanvasPage />} />
-            <Route path="/timeline" element={<TimelinePage />} />
-            <Route path="/assets" element={<AssetsPage />} />
-            <Route path="/models" element={<ModelsPage />} />
-            <Route path="/jobs" element={<JobsPage />} />
-            <Route path="/settings" element={<SettingsPage />} />
-          </Route>
-        </Routes>
-      </BrowserRouter>
+      <AuthProvider>
+        <BrowserRouter>
+          <Routes>
+            <Route path="/login" element={<LoginPage />} />
+            <Route
+              element={
+                <RequireAuth>
+                  <Layout />
+                </RequireAuth>
+              }
+            >
+              <Route index element={<HomePage />} />
+              <Route path="/drama" element={<DramaPage />} />
+              <Route path="/series" element={<SeriesPage />} />
+              <Route path="/radar" element={<RadarPage />} />
+              <Route path="/analyze" element={<AnalyzePage />} />
+              <Route path="/styles" element={<StylesPage />} />
+              <Route path="/projects" element={<ProjectsPage />} />
+              <Route path="/canvas" element={<CanvasPage />} />
+              <Route path="/timeline" element={<TimelinePage />} />
+              <Route path="/assets" element={<AssetsPage />} />
+              <Route path="/models" element={<ModelsPage />} />
+              <Route path="/jobs" element={<JobsPage />} />
+              <Route path="/settings" element={<SettingsPage />} />
+            </Route>
+          </Routes>
+        </BrowserRouter>
+      </AuthProvider>
     </QueryClientProvider>
   );
 }

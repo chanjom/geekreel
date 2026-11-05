@@ -1,6 +1,7 @@
 import type { DramaBible, Series, SeriesKind } from "@vw/core";
 import { db } from "../db";
 import { newId, now } from "../lib/resp";
+import { currentUserId } from "../lib/ctx";
 
 interface SeriesRow {
   id: string;
@@ -20,14 +21,20 @@ function rowToSeries(row: SeriesRow): Series {
   return row as unknown as Series;
 }
 
-export function listSeries(): Series[] {
-  return (db.query("SELECT * FROM series ORDER BY updatedAt DESC").all() as SeriesRow[]).map(rowToSeries);
+export function listSeries(ownerId?: string): Series[] {
+  const rows = ownerId
+    ? (db.query("SELECT * FROM series WHERE ownerId = ? ORDER BY updatedAt DESC").all(ownerId) as SeriesRow[])
+    : (db.query("SELECT * FROM series ORDER BY updatedAt DESC").all() as SeriesRow[]);
+  return rows.map(rowToSeries);
 }
 
-export function listSeriesPage(q: string, page: number, pageSize: number): { items: Series[]; total: number; page: number; pageSize: number } {
+export function listSeriesPage(q: string, page: number, pageSize: number, ownerId?: string): { items: Series[]; total: number; page: number; pageSize: number } {
   const needle = q.trim();
-  const where = needle ? "WHERE name LIKE ?" : "";
-  const params = needle ? [`%${needle}%`] : [];
+  const conds: string[] = [];
+  const params: string[] = [];
+  if (needle) { conds.push("name LIKE ?"); params.push(`%${needle}%`); }
+  if (ownerId) { conds.push("ownerId = ?"); params.push(ownerId); }
+  const where = conds.length ? `WHERE ${conds.join(" AND ")}` : "";
   const total = (db.query(`SELECT COUNT(*) AS n FROM series ${where}`).get(...params) as { n: number }).n;
   const offset = Math.max(page - 1, 0) * pageSize;
   const items = (
@@ -50,9 +57,9 @@ export function createSeries(input: {
   const id = newId();
   const t = now();
   db.run(
-    `INSERT INTO series (id, name, kind, stylePackId, substyle, paletteJson, bibleJson, episodeCount, lastProjectId, createdAt, updatedAt)
-     VALUES (?, ?, ?, ?, ?, NULL, NULL, 0, NULL, ?, ?)`,
-    [id, input.name.trim(), input.kind, input.stylePackId ?? null, input.substyle ?? null, t, t],
+    `INSERT INTO series (id, name, kind, stylePackId, substyle, ownerId, paletteJson, bibleJson, episodeCount, lastProjectId, createdAt, updatedAt)
+     VALUES (?, ?, ?, ?, ?, ?, NULL, NULL, 0, NULL, ?, ?)`,
+    [id, input.name.trim(), input.kind, input.stylePackId ?? null, input.substyle ?? null, currentUserId() ?? null, t, t],
   );
   return getSeries(id)!;
 }

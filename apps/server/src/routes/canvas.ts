@@ -3,6 +3,7 @@ import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "
 import { join } from "node:path";
 import { db } from "../db";
 import { err, newId, now, ok } from "../lib/resp";
+import { actor, ownsProject } from "../lib/auth";
 
 /**
  * 画布文档：JSON 落盘在项目目录 canvas/ 下（原子写），库里存索引。
@@ -23,6 +24,25 @@ function projectDir(projectId: string): string | null {
 }
 
 export const canvasRoutes = new Hono();
+
+/** 画布随项目归属 */
+function ownsCanvas(userId: string, canvasId: string): boolean {
+  const row = db.query("SELECT projectId FROM canvas_docs WHERE id = ?").get(canvasId) as { projectId: string } | null;
+  return Boolean(row && ownsProject(userId, row.projectId));
+}
+
+canvasRoutes.use("/project/:projectId", async (c, next) => {
+  if (!ownsProject(actor(c).id, c.req.param("projectId"))) return err(c, "项目不存在", 404);
+  return next();
+});
+canvasRoutes.use("/project/:projectId/*", async (c, next) => {
+  if (!ownsProject(actor(c).id, c.req.param("projectId"))) return err(c, "项目不存在", 404);
+  return next();
+});
+canvasRoutes.use("/:id", async (c, next) => {
+  if (!ownsCanvas(actor(c).id, c.req.param("id"))) return err(c, "画布不存在", 404);
+  return next();
+});
 
 /** 项目下的画布列表；没有则自动建「主画布」 */
 canvasRoutes.get("/project/:projectId", (c) => {

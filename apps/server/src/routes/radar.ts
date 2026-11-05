@@ -4,6 +4,7 @@ import { intervalPresets } from "@vw/core";
 import { hasHotlist, hotlistPlatforms, sourceTemplates } from "@vw/radar";
 import { jobQueue } from "../jobs/queue";
 import { err, ok } from "../lib/resp";
+import { requireAdmin } from "../lib/auth";
 import {
   clearItems,
   createSource,
@@ -29,6 +30,9 @@ import {
 } from "../services/radar";
 
 export const radarRoutes = new Hono();
+
+// 热点源、推送通道是全局配置，只有管理员能碰
+radarRoutes.use("/*", requireAdmin);
 
 radarRoutes.get("/status", (c) => {
   const sources = listSources();

@@ -254,6 +254,47 @@ CREATE TABLE IF NOT EXISTS series (
 )`);
 
 // ---------------------------------------------------------------------------
+// 账号与会话（多人部署用；单机模式不登录时全部数据归 admin）
+// ---------------------------------------------------------------------------
+
+db.run(`
+CREATE TABLE IF NOT EXISTS users (
+  id TEXT PRIMARY KEY,
+  email TEXT NOT NULL,
+  name TEXT NOT NULL DEFAULT '',
+  passwordHash TEXT NOT NULL,
+  role TEXT NOT NULL DEFAULT 'user',
+  status TEXT NOT NULL DEFAULT 'active',
+  createdAt INTEGER NOT NULL,
+  lastLoginAt INTEGER
+)`);
+db.run("CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email ON users(lower(email))");
+
+db.run(`
+CREATE TABLE IF NOT EXISTS sessions (
+  id TEXT PRIMARY KEY,
+  userId TEXT NOT NULL,
+  createdAt INTEGER NOT NULL,
+  expiresAt INTEGER NOT NULL,
+  ua TEXT,
+  ip TEXT
+)`);
+db.run("CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(userId)");
+db.run("CREATE INDEX IF NOT EXISTS idx_sessions_exp ON sessions(expiresAt)");
+
+// 归属：项目、端点、系列、分析报告各自属于一个用户
+ensureColumn("projects", "ownerId", "ownerId TEXT");
+ensureColumn("assets", "ownerId", "ownerId TEXT");
+ensureColumn("jobs", "ownerId", "ownerId TEXT");
+ensureColumn("model_endpoints", "ownerId", "ownerId TEXT");
+ensureColumn("series", "ownerId", "ownerId TEXT");
+ensureColumn("analysis_reports", "ownerId", "ownerId TEXT");
+ensureColumn("model_usage", "userId", "userId TEXT");
+db.run("CREATE INDEX IF NOT EXISTS idx_projects_owner ON projects(ownerId, createdAt DESC)");
+db.run("CREATE INDEX IF NOT EXISTS idx_endpoints_owner ON model_endpoints(ownerId)");
+db.run("CREATE INDEX IF NOT EXISTS idx_usage_user ON model_usage(userId, createdAt DESC)");
+
+// ---------------------------------------------------------------------------
 // 设置读写
 // ---------------------------------------------------------------------------
 

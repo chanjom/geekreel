@@ -7,6 +7,8 @@ import { join } from "node:path";
 import { version, webDist } from "./config";
 import { err, ok } from "./lib/resp";
 import { wsHub, type WsLike } from "./ws";
+import { attachUser, requireUser } from "./lib/auth";
+import { authRoutes } from "./routes/auth";
 import { projectsRoutes } from "./routes/projects";
 import { assetsRoutes } from "./routes/assets";
 import { jobsRoutes } from "./routes/jobs";
@@ -31,8 +33,12 @@ export function createApp() {
   const app = new Hono();
 
   app.use("/api/*", cors());
+  app.use("/api/*", attachUser);
+  app.use("/api/*", requireUser);
 
   app.get("/api/health", (c) => ok(c, { version, now: Date.now() }));
+
+  app.route("/api/auth", authRoutes);
 
   app.route("/api/projects", projectsRoutes);
   app.route("/api/assets", assetsRoutes);
