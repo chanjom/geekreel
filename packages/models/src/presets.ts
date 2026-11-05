@@ -261,6 +261,15 @@ export const modelPresets: ModelPreset[] = [
     secretKeys: ["apiKey"],
   },
   {
+    id: "windows-tts",
+    name: "本机配音",
+    hint: "用 Windows 自带语音引擎，离线免费不限字数，不需要密钥。音色比云端机械，适合先把片子跑通。",
+    capability: "tts",
+    adapterType: "windows-tts",
+    config: { rate: "0" },
+    secretKeys: [],
+  },
+  {
     id: "doubao-tts",
     name: "豆包配音",
     hint: "到 ark.volcengine.com 复制 API Key。模型名按控制台接入点改。",

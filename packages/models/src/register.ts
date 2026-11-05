@@ -2,7 +2,9 @@
 import { registerAdapter } from "./index";
 import { comfyui } from "./comfyui";
 import { doubaoSeedance, kling } from "./video";
+import { windowsTts } from "./windowsTts";
 
 registerAdapter(kling);
 registerAdapter(doubaoSeedance);
 registerAdapter(comfyui);
+registerAdapter(windowsTts);
